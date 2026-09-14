@@ -13,6 +13,7 @@
 * **Uncompressed Local Directories**: Direct in-place scanning without disk duplication.
 * **Forensic Extraction Reports**: .xlsx and .csv files from Cellebrite Physical Analyzer, UFED Reader, and Oxygen Forensics (with automated header row detection and timezone offsets UTC+X).
 * **Standalone Files**: SQLite databases (.sqlite, .db, .db3, .mapsdata), track logs (.gpx, .kml, .geojson), Google Takeout JSON files, and media with embedded EXIF GPS tags (JPEG, HEIC, PNG, TIFF, WebP).
+* **iOS Cache.sqlite & CFNetwork Harvester**: Deep inspection of application network caches (`Library/Caches/<bundle_id>/Cache.sqlite`), extracting GPS coordinates embedded in API request URLs (`cfurl_cache_response`), slippy map tile URLs (`/z/x/y.png`), cached response JSON blobs (`cfurl_cache_receiver_data`), and legacy `locationd` databases.
 * **Generic SQLite Scraper**: Heuristic pattern matching on unindexed SQLite databases to extract coordinates, accuracy, altitude, and epoch timestamps automatically.
 
 ### 2. Forensic Traceability & Chain of Custody
@@ -121,8 +122,8 @@ python run.py
 
 | Operating System / Source | Artifact Location & Files | Recovered Forensic Data |
 | :--- | :--- | :--- |
-| **iOS System** | CoreRoutine.sqlite, cache_encryptedA.db, cache_encryptedB.db, lockCache_encryptedA.db | GPS fixes, Significant visits, frequent locations, paired Bluetooth vehicles, Wi-Fi hotspots, cell towers |
-| **iOS Apps & Media** | Photos.sqlite, GeoHistory.mapsdata, WhatsApp (ChatStorage.sqlite) | Geotagged camera rolls, Apple Maps navigation & search history, shared live locations |
+| **iOS System** | CoreRoutine.sqlite, cache_encryptedA.db, cache_encryptedB.db, lockCache_encryptedA.db, legacy locationd/Cache.sqlite (or consolidated.db) | GPS fixes, Significant visits, frequent locations, paired Bluetooth vehicles, Wi-Fi hotspots, cell towers |
+| **iOS Apps & Media** | Photos.sqlite, GeoHistory.mapsdata, WhatsApp (ChatStorage.sqlite), **App Cache.sqlite** (CFNetwork / NSURLCache in `Library/Caches/<bundle_id>/Cache.sqlite`: Google Maps, Apple Maps, Waze, Uber, Social Media, Browsers) | Geotagged camera rolls, Apple Maps navigation & search history, shared live locations, **embedded GPS coordinates in HTTP/API request URLs (`cfurl_cache_response`), slippy map tile URLs (`/z/x/y.png`), and cached JSON response blobs (`cfurl_cache_receiver_data`)** |
 | **Android System** | gservices.db, location.db, fused_location, telephony.db, geolocation.db | Google Location History cache, Fused Location Provider, base stations (cell towers) |
 | **Android Apps** | Google Maps (da_destination_history), WhatsApp (msgstore.db), Waze | Turn-by-turn navigation history, search destinations, shared WhatsApp coordinates |
 | **Forensic Reports** | .xlsx / .csv (Cellebrite Physical Analyzer, UFED Reader, Oxygen) | Normalized location tables, carved records, WAL journal recoveries |
