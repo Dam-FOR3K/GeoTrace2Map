@@ -1,0 +1,1649 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GeoTrace2Map (GT2M) | Plateforme Forensique de Géolocalisation & Cartographie</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { 500: '#10b981', 600: '#059669', 700: '#047857' }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Leaflet MarkerCluster -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+  <!-- Leaflet Heat -->
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+
+  <!-- Leaflet Ant Path (Directional Animated Trajectories) -->
+  <script src="https://cdn.jsdelivr.net/npm/leaflet-ant-path@1.3.0/dist/leaflet-ant-path.min.js"></script>
+
+  <style>
+    #map { height: 100%; width: 100%; }
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    .leaflet-popup-content-wrapper { background: #0f172a; color: #f8fafc; border-radius: 8px; border: 1px solid #334155; }
+    .leaflet-popup-tip { background: #0f172a; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 flex flex-col h-screen overflow-hidden font-sans select-none">
+
+  <!-- Top Navbar -->
+  <header class="h-16 bg-slate-900 border-b border-slate-800 px-4 flex items-center justify-between shrink-0 z-20">
+    <div class="flex items-center space-x-3">
+      <div class="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-900/20">
+        <i class="fa-solid fa-satellite-dish text-xl"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="font-bold text-base tracking-wide text-white">GeoTrace2Map</h1>
+          <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase">GT2M • DFIR</span>
+          <span class="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">by Dam-FOR3K</span>
+        </div>
+        <p class="text-xs text-slate-400" data-i18n="app_subtitle">Analyseur & Cartographie Forensique iOS • Android • UFED</p>
+      </div>
+    </div>
+
+    <!-- Central Forensic Metrics Bar -->
+    <div class="hidden lg:flex items-center space-x-5 text-xs bg-slate-950/70 py-1.5 px-4 rounded-xl border border-slate-800">
+      <div class="flex items-center gap-2">
+        <i class="fa-solid fa-location-crosshairs text-emerald-400"></i>
+        <span class="text-slate-400" data-i18n="stat_points">Points :</span>
+        <span class="font-bold font-mono text-emerald-400 text-sm" id="stat-points">0</span>
+      </div>
+      <div class="h-4 w-px bg-slate-800"></div>
+      <div class="flex items-center gap-2">
+        <i class="fa-solid fa-route text-sky-400"></i>
+        <span class="text-slate-400" data-i18n="stat_distance">Distance :</span>
+        <span class="font-bold font-mono text-sky-300" id="stat-distance">0.0 km</span>
+      </div>
+      <div class="h-4 w-px bg-slate-800"></div>
+      <div class="flex items-center gap-2">
+        <i class="fa-solid fa-gauge-high text-amber-400"></i>
+        <span class="text-slate-400" data-i18n="stat_speed">Vit. Max :</span>
+        <span class="font-mono text-amber-300" id="stat-speed">0 km/h</span>
+      </div>
+      <div class="h-4 w-px bg-slate-800"></div>
+      <div class="flex items-center gap-2">
+        <i class="fa-solid fa-circle-stop text-red-400"></i>
+        <span class="text-slate-400" data-i18n="stat_stops">Arrêts :</span>
+        <span class="font-mono text-red-300" id="stat-stops">0</span>
+      </div>
+    </div>
+
+    <!-- Actions & Toolbar -->
+    <div class="flex items-center space-x-2">
+      <!-- Language Switcher Toggle (FR / EN) -->
+      <div class="flex items-center bg-slate-950 rounded-lg p-0.5 border border-slate-700 mr-1 shadow-inner">
+        <button onclick="setLanguage('fr')" id="lang-btn-fr" class="px-2.5 py-1 text-xs font-bold rounded transition text-emerald-400 bg-slate-800 shadow-sm flex items-center gap-1">
+          <span>🇫🇷</span> FR
+        </button>
+        <button onclick="setLanguage('en')" id="lang-btn-en" class="px-2.5 py-1 text-xs font-bold rounded transition text-slate-400 hover:text-white flex items-center gap-1">
+          <span>🇬🇧</span> EN
+        </button>
+      </div>
+
+      <button onclick="reloadWorkspaceFile()" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-emerald-400 flex items-center gap-1.5 transition" data-i18n-title="btn_reload_title" title="Recharger les données avec la dernière version du moteur">
+        <i class="fa-solid fa-arrows-rotate"></i> <span data-i18n="btn_reload">Recharger</span>
+      </button>
+      <button onclick="openUploadModal()" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 transition shadow-md shadow-emerald-900/30">
+        <i class="fa-solid fa-folder-open"></i> <span data-i18n="btn_extract">Extraire (ZIP / Dossier)</span>
+      </button>
+
+      <!-- Export Dropdown -->
+      <div class="relative inline-block text-left">
+        <button onclick="toggleExportMenu()" id="export-menu-btn" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 flex items-center gap-1.5 transition">
+          <i class="fa-solid fa-file-export text-emerald-400"></i> <span data-i18n="btn_export">Exporter</span> <i class="fa-solid fa-chevron-down text-[10px] text-slate-400 ml-1"></i>
+        </button>
+        <div id="export-dropdown" class="hidden absolute right-0 mt-2 w-56 rounded-xl bg-slate-900 border border-slate-800 shadow-2xl py-1 z-[99999] text-xs">
+          <a href="/api/export/html" target="_blank" class="flex items-center gap-2 px-3 py-2 text-slate-300 hover:bg-emerald-600/20 hover:text-emerald-300">
+            <i class="fa-solid fa-earth-americas text-emerald-400"></i> <span data-i18n="export_html">Rapport HTML Autonome</span>
+          </a>
+          <a href="/api/export/kml" target="_blank" class="flex items-center gap-2 px-3 py-2 text-slate-300 hover:bg-sky-600/20 hover:text-sky-300">
+            <i class="fa-solid fa-globe text-sky-400"></i> <span data-i18n="export_kml">Fichier KML (Google Earth)</span>
+          </a>
+          <a href="/api/export/gpx" target="_blank" class="flex items-center gap-2 px-3 py-2 text-slate-300 hover:bg-amber-600/20 hover:text-amber-300">
+            <i class="fa-solid fa-compass text-amber-400"></i> <span data-i18n="export_gpx">Fichier GPX (Tracés)</span>
+          </a>
+          <a href="/api/export/csv" target="_blank" class="flex items-center gap-2 px-3 py-2 text-slate-300 hover:bg-purple-600/20 hover:text-purple-300">
+            <i class="fa-solid fa-table text-purple-400"></i> <span data-i18n="export_csv">Fichier CSV (Excel Forensic)</span>
+          </a>
+        </div>
+      </div>
+
+      <button onclick="toggleTableDrawer()" id="btn-toggle-table" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition flex items-center gap-1.5" data-i18n-title="btn_data_table" title="Ouvrir le Tableau des Données">
+        <i class="fa-solid fa-table-list text-sky-400"></i> <span data-i18n="btn_data_table">Tableau</span>
+      </button>
+
+      <button onclick="openSettingsModal()" class="p-2 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition" data-i18n-title="btn_settings_title" title="Paramètres Moteurs & Sécurité">
+        <i class="fa-solid fa-gear"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- Extraction Progress Banner -->
+  <div id="progress-banner" class="hidden bg-slate-900 border-b border-emerald-500/30 px-4 py-2 flex items-center justify-between text-xs z-10 transition-all">
+    <div class="flex items-center gap-3 flex-1 mr-4">
+      <div class="w-4 h-4 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin"></div>
+      <span class="text-slate-300 font-medium" id="progress-status">Extraction en cours...</span>
+    </div>
+    <div class="w-48 bg-slate-800 rounded-full h-2 overflow-hidden mr-3">
+      <div id="progress-bar" class="bg-emerald-500 h-2 transition-all duration-300" style="width: 0%"></div>
+    </div>
+    <span class="font-mono text-emerald-400 font-bold" id="progress-pct">0%</span>
+  </div>
+
+  <!-- Main Content Layout -->
+  <div class="flex-1 flex relative overflow-hidden">
+
+    <!-- Left Controls Panel -->
+    <aside class="w-84 bg-slate-900/95 border-r border-slate-800 flex flex-col shrink-0 z-10 w-80">
+      <!-- Tabs (Filtres / Jours / Trajets) -->
+      <div class="flex border-b border-slate-800 bg-slate-950 text-xs">
+        <button onclick="switchLeftTab('filters')" id="tab-btn-filters" class="flex-1 py-2.5 text-center font-semibold text-emerald-400 border-b-2 border-emerald-500 transition">
+          <i class="fa-solid fa-filter mr-1"></i> <span data-i18n="tab_categories">Filtres</span>
+        </button>
+        <button onclick="switchLeftTab('days')" id="tab-btn-days" class="flex-1 py-2.5 text-center font-medium text-slate-400 hover:text-slate-200 border-b-2 border-transparent transition">
+          <i class="fa-solid fa-calendar mr-1"></i> <span data-i18n="tab_days">Jours</span>
+        </button>
+        <button onclick="switchLeftTab('trips')" id="tab-btn-trips" class="flex-1 py-2.5 text-center font-medium text-slate-400 hover:text-slate-200 border-b-2 border-transparent transition">
+          <i class="fa-solid fa-route mr-1"></i> <span data-i18n="tab_trips">Trajets</span>
+        </button>
+      </div>
+
+      <!-- Tab Content: Filters -->
+      <div id="tab-content-filters" class="p-3 space-y-4 overflow-y-auto custom-scrollbar flex-1 text-xs">
+        <!-- Search -->
+        <div>
+          <label class="font-medium text-slate-400 block mb-1" data-i18n="search_label">Recherche Globale</label>
+          <div class="relative">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-500 text-xs"></i>
+            <input type="text" id="search-input" data-i18n-placeholder="search_placeholder" placeholder="Rechercher une date, source, fichier, antenne..." oninput="onFilterChange()" class="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-slate-200 focus:outline-none focus:border-emerald-500">
+          </div>
+        </div>
+
+        <!-- Accuracy Filter Slider -->
+        <div>
+          <div class="flex justify-between text-slate-400 mb-1">
+            <span data-i18n="accuracy_tolerance">Précision Max</span>
+            <span id="acc-label" class="text-slate-200 font-mono">Toutes</span>
+          </div>
+          <input type="range" id="acc-slider" min="5" max="5000" step="10" value="5000" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500" oninput="onAccuracySlider(this.value)">
+        </div>
+
+        <!-- Categories / Sources Checkboxes -->
+        <div>
+          <label class="font-medium text-slate-400 block mb-2" data-i18n="sources_artifacts_title">Sources & Artefacts</label>
+          <div class="space-y-1.5" id="categories-container">
+            <div class="text-slate-500 italic" data-i18n="load_file_prompt">Chargez un fichier pour afficher les catégories.</div>
+          </div>
+        </div>
+
+        <!-- Map Layer & Directional Toggles -->
+        <div class="pt-2 border-t border-slate-800 space-y-2">
+          <label class="font-medium text-slate-400 block mb-1" data-i18n="adv_vis_title">Visualisations Avancées</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="toggleAntPath()" id="btn-antpath" class="p-2 rounded-lg bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-300 flex items-center justify-center gap-1.5 transition">
+              <i class="fa-solid fa-arrows-split-up-and-left text-emerald-400"></i> <span data-i18n="btn_antpath">Ant Path</span>
+            </button>
+            <button onclick="toggleHeatmap()" id="btn-heat" class="p-2 rounded-lg bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-300 flex items-center justify-center gap-1.5 transition">
+              <i class="fa-solid fa-fire text-orange-400"></i> <span data-i18n="btn_heatmap">Heatmap</span>
+            </button>
+            <button onclick="togglePolyline()" id="btn-route" class="p-2 rounded-lg bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-300 flex items-center justify-center gap-1.5 transition">
+              <i class="fa-solid fa-route text-sky-400"></i> <span data-i18n="btn_simple_line">Ligne Simple</span>
+            </button>
+            <button onclick="toggleStopPoints()" id="btn-stops" class="p-2 rounded-lg bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-300 flex items-center justify-center gap-1.5 transition">
+              <i class="fa-solid fa-circle-stop text-red-400"></i> <span data-i18n="btn_stops">Arrêts (🛑)</span>
+            </button>
+            <button onclick="toggleClustering()" id="btn-cluster" class="p-2 rounded-lg bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-300 flex items-center justify-center gap-1.5 transition col-span-2" data-i18n-title="btn_cluster_title" title="Activer/Désactiver le regroupement en bulles">
+              <i class="fa-solid fa-circle-nodes text-emerald-400"></i> <span id="btn-cluster-text" data-i18n="mode_clusters">Mode Clusters Activé</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Content: Days -->
+      <div id="tab-content-days" class="hidden p-3 space-y-2 overflow-y-auto custom-scrollbar flex-1 text-xs">
+        <div class="flex items-center justify-between pb-1 border-b border-slate-800">
+          <span class="font-bold text-slate-300 uppercase" data-i18n="filter_by_day">Filtrer par Journée</span>
+          <button onclick="selectDay(null)" class="text-xs text-emerald-400 hover:underline" data-i18n="all_days">Tous les jours</button>
+        </div>
+        <div id="days-list-container" class="space-y-1.5">
+          <div class="text-slate-500 italic py-4 text-center" data-i18n="no_days">Aucune date disponible.</div>
+        </div>
+      </div>
+
+      <!-- Tab Content: Trips -->
+      <div id="tab-content-trips" class="hidden p-3 space-y-2 overflow-y-auto custom-scrollbar flex-1 text-xs">
+        <div class="flex items-center justify-between pb-1 border-b border-slate-800">
+          <span class="font-bold text-slate-300 uppercase" data-i18n="trips_detected_title">Trajets Détectés</span>
+          <button onclick="selectTrip(null)" class="text-xs text-emerald-400 hover:underline" data-i18n="all_trips">Tous</button>
+        </div>
+        <div id="trips-list-container" class="space-y-2">
+          <div class="text-slate-500 italic py-4 text-center" data-i18n="no_trips">Aucun trajet segmenté.</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Center Map Area -->
+    <main class="flex-1 relative flex flex-col">
+      <div id="map"></div>
+
+      <!-- Active Filter Badge on Map -->
+      <div id="active-filter-indicator" class="hidden absolute top-4 left-14 z-[1000] bg-slate-900/90 backdrop-blur-md border border-emerald-500/40 rounded-lg px-3 py-1.5 shadow-xl flex items-center gap-2 text-xs text-emerald-300">
+        <i class="fa-solid fa-filter text-emerald-400"></i>
+        <span id="active-filter-text">Filtre actif</span>
+        <button onclick="clearSpecificFilters()" class="text-slate-400 hover:text-white ml-2"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <!-- Recenter View Button -->
+      <button onclick="fitMapBounds()" class="absolute top-4 right-14 z-[1000] bg-slate-900/90 backdrop-blur-md border border-slate-700 hover:border-emerald-500 rounded-lg px-3 py-1.5 shadow-xl flex items-center gap-1.5 text-xs text-slate-200 transition hover:text-white">
+        <i class="fa-solid fa-crosshairs text-emerald-400"></i> <span data-i18n="recenter_view">Recentrer la vue</span>
+      </button>
+
+      <!-- Playback Timeline Bar -->
+      <div class="absolute bottom-4 left-6 right-6 z-[1000] bg-slate-900/90 backdrop-blur-md border border-slate-700/60 rounded-xl p-3 shadow-2xl flex flex-col gap-2 max-w-xl mx-auto">
+        <div class="flex items-center justify-between text-xs text-slate-300">
+          <div class="flex items-center gap-2">
+            <button onclick="togglePlay()" id="btn-play" class="w-7 h-7 rounded-lg bg-emerald-500 text-slate-950 flex items-center justify-center font-bold hover:bg-emerald-400 transition">
+              <i class="fa-solid fa-play" id="play-icon"></i>
+            </button>
+            <span class="font-medium text-slate-200" data-i18n="timeline_title">Relecture Chronologique</span>
+          </div>
+          <span class="text-xs font-mono text-emerald-400" id="timeline-label">Tous les points</span>
+        </div>
+        <input type="range" id="timeline-range" min="0" max="100" value="100" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500" oninput="onTimelineSlider(this.value)">
+      </div>
+    </main>
+
+    <!-- Right Forensic Inspector -->
+    <aside id="inspector" class="w-96 bg-slate-900/95 border-l border-slate-800 flex flex-col shrink-0 z-10 transition-all">
+      <div class="p-3 border-b border-slate-800 flex items-center justify-between">
+        <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+          <i class="fa-solid fa-fingerprint text-emerald-400"></i> <span data-i18n="inspector_title">Fiche d'Origine Forensic</span>
+        </h3>
+        <button onclick="closeInspector()" class="text-slate-400 hover:text-slate-200 text-sm">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="p-4 overflow-y-auto custom-scrollbar flex-1 text-xs space-y-3" id="inspector-body">
+        <div class="text-slate-500 italic text-center py-10">
+          <i class="fa-solid fa-map-pin text-3xl mb-2 block opacity-40"></i>
+          <span data-i18n="inspector_empty_hint">Cliquez sur un marqueur ou un arrêt sur la carte pour voir sa traçabilité exacte (fichier source, table, champ, précision, vitesse).</span>
+        </div>
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- Bottom Collapsible Data Table Drawer -->
+  <div id="table-drawer" class="hidden h-64 bg-slate-900 border-t border-slate-800 z-30 flex flex-col shrink-0 transition-all">
+    <div class="px-4 py-2 bg-slate-950 border-b border-slate-800 flex items-center justify-between text-xs">
+      <div class="flex items-center gap-3">
+        <span class="font-bold text-slate-200 flex items-center gap-1.5"><i class="fa-solid fa-table-cells text-emerald-400"></i> <span data-i18n="table_title">Table des Coordonnées</span> (<span id="table-count">0</span>)</span>
+      </div>
+      <button onclick="toggleTableDrawer()" class="text-slate-400 hover:text-slate-200"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="flex-1 overflow-auto custom-scrollbar text-xs">
+      <table class="w-full text-left border-collapse font-mono">
+        <thead class="bg-slate-950 text-slate-400 sticky top-0 border-b border-slate-800 text-[11px]">
+          <tr>
+            <th class="p-2" data-i18n="col_num">#</th>
+            <th class="p-2" data-i18n="col_datetime">Date/Heure</th>
+            <th class="p-2" data-i18n="col_lat">Latitude</th>
+            <th class="p-2" data-i18n="col_lon">Longitude</th>
+            <th class="p-2" data-i18n="col_acc">Précision</th>
+            <th class="p-2" data-i18n="col_speed">Vitesse</th>
+            <th class="p-2 font-sans" data-i18n="col_source">Source</th>
+            <th class="p-2 font-sans" data-i18n="col_file">Fichier Origine</th>
+            <th class="p-2 font-sans" data-i18n="col_action">Action</th>
+          </tr>
+        </thead>
+        <tbody id="table-body" class="divide-y divide-slate-800/60 text-slate-300">
+          <!-- Populated dynamically -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Upload Modal -->
+  <div id="upload-modal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-[99999] flex items-center justify-center p-4" onclick="if(event.target===this) closeUploadModal()">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 relative z-[100000]">
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-base text-white flex items-center gap-2">
+          <i class="fa-solid fa-upload text-emerald-400"></i> <span data-i18n="upload_title">Importer une Extraction Mobile</span>
+        </h3>
+        <button onclick="closeUploadModal()" class="text-slate-400 hover:text-slate-200 p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <!-- Drag & Drop Zone -->
+      <div id="drop-zone" class="border-2 border-dashed border-slate-700 hover:border-emerald-500 rounded-xl p-8 text-center cursor-pointer transition bg-slate-950/70 flex flex-col items-center justify-center space-y-2">
+        <i class="fa-solid fa-cloud-arrow-up text-4xl text-emerald-400/80 mb-1"></i>
+        <p class="font-semibold text-slate-200 text-sm" data-i18n="upload_drop_text">Glissez-déposez votre archive ici ou cliquez</p>
+        <p class="text-xs text-slate-400" data-i18n="upload_formats">Supporte les formats .ZIP, .TAR, .XLSX (UFED), .CSV, .DB, .GPX, .KML, Photos</p>
+        <input type="file" id="file-input" class="hidden" onchange="handleFileSelect(this.files)">
+      </div>
+
+      <div class="flex items-center my-3">
+        <div class="flex-1 h-px bg-slate-800"></div>
+        <span class="px-3 text-xs text-slate-500 font-medium" data-i18n="upload_local_title">OU DOSSIER LOCAL SUR CE PC</span>
+        <div class="flex-1 h-px bg-slate-800"></div>
+      </div>
+
+      <!-- Local Folder Path Input -->
+      <div class="space-y-2">
+        <label class="text-xs font-medium text-slate-300 block" data-i18n="upload_local_label">Chemin absolu du dossier décompressé :</label>
+        <div class="flex gap-2">
+          <input type="text" id="folder-path-input" placeholder="C:\Extractions\iPhone_Dump" class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 font-mono">
+          <button onclick="submitLocalFolder()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-semibold text-white transition shadow-sm" data-i18n="upload_btn_analyze">Analyser</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settings-modal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-[99999] flex items-center justify-center p-4" onclick="if(event.target===this) closeSettingsModal()">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 relative z-[100000]">
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-base text-white flex items-center gap-2">
+          <i class="fa-solid fa-gear text-emerald-400"></i> <span data-i18n="settings_title">Paramètres Moteurs & Sécurité</span>
+        </h3>
+        <button onclick="closeSettingsModal()" class="text-slate-400 hover:text-slate-200 p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <!-- Air-Gap Forensic Security Guard -->
+        <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-slate-200"><i class="fa-solid fa-shield-halved text-emerald-400 mr-1"></i> <span data-i18n="airgap_title">Mode Sécurité Air-Gap</span></span>
+            <span id="airgap-badge" class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold text-[10px]" data-i18n="airgap_badge_active">ACTIF</span>
+          </div>
+          <p class="text-[11px] text-slate-400 leading-relaxed" data-i18n="airgap_desc">
+            Bloque toute émission de coordonnées GPS vers des serveurs tiers externes (OpenStreetMap, etc.) pour garantir la stricte confidentialité judiciaire de l'enquête.
+          </p>
+          <label class="flex items-center gap-2 cursor-pointer pt-1">
+            <input type="checkbox" id="allow-online-check" class="rounded bg-slate-900 border-slate-700 text-amber-500 focus:ring-0">
+            <span class="text-slate-300 text-[11px]" data-i18n="airgap_checkbox">Autoriser les requêtes externes en ligne (résolution d'adresses)</span>
+          </label>
+        </div>
+
+        <div>
+          <label class="text-slate-300 font-medium block mb-1" data-i18n="wigle_user_label">WiGLE API Username (Optionnel)</label>
+          <input type="text" id="wigle-name" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200">
+        </div>
+        <div>
+          <label class="text-slate-300 font-medium block mb-1" data-i18n="wigle_key_label">WiGLE API Token / Key (Optionnel)</label>
+          <input type="password" id="wigle-key" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200">
+        </div>
+        <div>
+          <label class="text-slate-300 font-medium block mb-1" data-i18n="mls_db_label">Fichier Base Antennes MLS.db (Optionnel, Hors-Ligne)</label>
+          <input type="text" id="mls-db" value="MLS.db" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200">
+        </div>
+        <div>
+          <label class="text-slate-300 font-medium block mb-1" data-i18n="mbtiles_label">Fichier Carte Hors-Ligne MBTiles (Chemin absolu ou relatif)</label>
+          <input type="text" id="mbtiles-file" value="map.mbtiles" placeholder="ex: D:\Cartes\france.mbtiles ou map.mbtiles" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200 font-mono text-xs">
+          <div id="mbtiles-status" class="mt-1 text-[11px] text-slate-400"></div>
+        </div>
+        <button onclick="saveSettings()" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-white font-semibold transition mt-2" data-i18n="btn_save">Enregistrer</button>
+        <div class="pt-2 border-t border-slate-800 text-center text-[11px] text-slate-500">
+          GeoTrace2Map (GT2M) • Développé par <span class="text-slate-300 font-semibold">Dam-FOR3K</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Application Logic -->
+  <script>
+    const I18N = {
+      fr: {
+        app_subtitle: "Analyseur Géolocalisation iOS • Android • UFED",
+        stat_points: "Points :",
+        stat_distance: "Distance :",
+        stat_speed: "Vit. Max :",
+        stat_stops: "Arrêts :",
+        btn_reload: "Recharger",
+        btn_reload_title: "Recharger les données avec la dernière version du moteur",
+        btn_extract: "Extraire (ZIP / Dossier)",
+        btn_export: "Exporter",
+        export_html: "Rapport HTML Autonome",
+        export_kml: "Fichier KML (Google Earth)",
+        export_gpx: "Fichier GPX (Tracés)",
+        export_csv: "Fichier CSV (Excel Forensic)",
+        btn_data_table: "Tableau",
+        btn_settings_title: "Paramètres Moteurs & Sécurité",
+        tab_categories: "Filtres",
+        tab_days: "Jours",
+        tab_trips: "Trajets",
+        search_label: "Recherche Globale",
+        search_placeholder: "Rechercher une date, source, fichier, antenne...",
+        accuracy_tolerance: "Précision Max",
+        accuracy_all: "Toutes",
+        sources_artifacts_title: "Sources & Artefacts",
+        load_file_prompt: "Chargez un fichier pour afficher les catégories.",
+        adv_vis_title: "Visualisations Avancées",
+        btn_antpath: "Ant Path",
+        btn_heatmap: "Heatmap",
+        btn_simple_line: "Ligne Simple",
+        btn_stops: "Arrêts (🛑)",
+        mode_clusters: "Mode Clusters Activé",
+        mode_unfolded: "Tous les Points Dépliés (Sans Cluster)",
+        btn_cluster_title: "Activer/Désactiver le regroupement en bulles",
+        filter_by_day: "Filtrer par Journée",
+        all_days: "Tous les jours",
+        no_days: "Aucun jour détecté.",
+        trips_detected_title: "Trajets Détectés",
+        all_trips: "Tous",
+        no_trips: "Aucun trajet continu détecté.",
+        recenter_view: "Recentrer la vue",
+        timeline_title: "Relecture Chronologique",
+        all_points: "Tous les points",
+        point_num: "Point #",
+        table_title: "Table des Coordonnées",
+        col_num: "#",
+        col_datetime: "Date/Heure",
+        col_lat: "Latitude",
+        col_lon: "Longitude",
+        col_acc: "Précision",
+        col_speed: "Vitesse",
+        col_source: "Source",
+        col_file: "Fichier Origine",
+        col_action: "Action",
+        btn_view: "Voir",
+        inspector_title: "Fiche d'Origine Forensic",
+        inspector_empty_hint: "Cliquez sur un marqueur ou un arrêt sur la carte pour voir sa traçabilité exacte (fichier source, table, champ, précision, vitesse).",
+        insp_coords: "Coordonnées GPS :",
+        insp_utc: "Date/Heure UTC :",
+        insp_local: "Date/Heure Locale :",
+        insp_acc: "Précision (Rayon) :",
+        insp_speed: "Vitesse estimée :",
+        insp_alt: "Altitude :",
+        insp_file: "Fichier Source :",
+        insp_table: "Table / Champ SQLite :",
+        insp_unspecified: "Non précisée",
+        insp_meters: "mètres",
+        insp_duplicates_title: "Enregistrements / Doublons identifiés :",
+        insp_resolve_address: "Résoudre l'adresse postale",
+        airgap_blocked_msg: "Mode Sécurité Hors-Ligne Strict actif : la transmission de coordonnées GPS sur Internet est bloquée pour préserver le secret de l'enquête. Vous pouvez l'autoriser explicitement dans les Paramètres.",
+        popup_recorded_events: "Événements enregistrés",
+        popup_same_loc: "Même Position",
+        popup_unknown_date: "Date inconnue",
+        popup_inspect: "Inspecter cet événement",
+        popup_file: "Fichier :",
+        popup_acc: "Précision :",
+        popup_speed: "Vitesse estimée :",
+        popup_occurrences: "Occurrences dans le rapport :",
+        stop_title: "Point d'Arrêt / Stationnement",
+        stop_prolonged: "Arrêt Prolongé",
+        stop_arrival: "Arrivée :",
+        stop_departure: "Départ :",
+        stop_dwell: "Durée d'arrêt :",
+        stop_radius: "Rayon :",
+        stop_fixes: "Fixes enregistrés :",
+        trip_card_dur: "Durée :",
+        trip_card_dist: "Distance :",
+        trip_card_avgspeed: "Vit. Moy :",
+        trip_card_maxspeed: "Vit. Max :",
+        trip_card_points: "points",
+        upload_title: "Importer une Extraction Mobile",
+        upload_drop_text: "Glissez-déposez votre archive ici ou cliquez",
+        upload_formats: "Supporte les formats .ZIP, .TAR, .XLSX (UFED), .CSV, .DB, .GPX, .KML, Photos",
+        upload_local_title: "OU DOSSIER LOCAL SUR CE PC",
+        upload_local_label: "Chemin absolu du dossier décompressé :",
+        upload_btn_analyze: "Analyser",
+        settings_title: "Paramètres Moteurs & Sécurité",
+        airgap_title: "Mode Sécurité Air-Gap",
+        airgap_badge_active: "ACTIF (Recommandé)",
+        airgap_badge_disabled: "DÉSACTIVÉ (En Ligne)",
+        airgap_desc: "Bloque toute émission de coordonnées GPS vers des serveurs tiers externes (OpenStreetMap, etc.) pour garantir la stricte confidentialité judiciaire de l'enquête.",
+        airgap_checkbox: "Autoriser les requêtes externes en ligne (résolution d'adresses)",
+        wigle_user_label: "WiGLE API Username (Optionnel)",
+        wigle_key_label: "WiGLE API Token / Key (Optionnel)",
+        mls_db_label: "Fichier Base Antennes MLS.db (Optionnel, Hors-Ligne)",
+        mbtiles_label: "Fichier Carte Hors-Ligne MBTiles (Chemin absolu ou relatif)",
+        mbtiles_found: "Fichier détecté et valide",
+        mbtiles_not_found: "Fichier introuvable à cet emplacement",
+        mbtiles_optional_hint: "Optionnel : indiquez le chemin d'un fichier .mbtiles",
+        layer_osm: "OpenStreetMap (En ligne)",
+        layer_offline: "Carte Hors-Ligne Locale (Air-Gap)",
+        layer_sat: "Vue Satellite HD",
+        layer_dark: "Carte Sombre (Forensic)",
+        insp_resolve_wigle: "Rechercher BSSID sur WiGLE",
+        wigle_found_alert: "Point d'accès Wi-Fi géolocalisé par WiGLE !",
+        filter_day_selected: "Jour sélectionné :",
+        filter_trip_num: "Trajet #",
+        uploading_file: "Envoi de",
+        scanning_folder: "Démarrage de l'analyse du dossier",
+        btn_save: "Enregistrer"
+      },
+      en: {
+        app_subtitle: "iOS • Android • UFED Geolocation Analyzer",
+        stat_points: "Points:",
+        stat_distance: "Distance:",
+        stat_speed: "Max Speed:",
+        stat_stops: "Stops:",
+        btn_reload: "Reload",
+        btn_reload_title: "Reload data with the latest engine version",
+        btn_extract: "Extract (ZIP / Folder)",
+        btn_export: "Export",
+        export_html: "Standalone HTML Report",
+        export_kml: "KML File (Google Earth)",
+        export_gpx: "GPX File (Tracks)",
+        export_csv: "CSV File (Forensic Excel)",
+        btn_data_table: "Table",
+        btn_settings_title: "Engine & Security Settings",
+        tab_categories: "Filters",
+        tab_days: "Days",
+        tab_trips: "Trips",
+        search_label: "Global Search",
+        search_placeholder: "Search date, source, file, cell tower...",
+        accuracy_tolerance: "Max Accuracy",
+        accuracy_all: "All",
+        sources_artifacts_title: "Sources & Artifacts",
+        load_file_prompt: "Load a file to display forensic categories.",
+        adv_vis_title: "Advanced Visualizations",
+        btn_antpath: "Ant Path",
+        btn_heatmap: "Heatmap",
+        btn_simple_line: "Single Line",
+        btn_stops: "Stops (🛑)",
+        mode_clusters: "Cluster Mode Active",
+        mode_unfolded: "All Points Unfolded (No Clusters)",
+        btn_cluster_title: "Enable/Disable marker clustering bubbles",
+        filter_by_day: "Filter by Calendar Day",
+        all_days: "All days",
+        no_days: "No dates available.",
+        trips_detected_title: "Detected Trips",
+        all_trips: "All",
+        no_trips: "No continuous trips detected.",
+        recenter_view: "Recenter View",
+        timeline_title: "Chronological Playback",
+        all_points: "All points",
+        point_num: "Point #",
+        table_title: "Coordinates Table",
+        col_num: "#",
+        col_datetime: "Date/Time",
+        col_lat: "Latitude",
+        col_lon: "Longitude",
+        col_acc: "Accuracy",
+        col_speed: "Speed",
+        col_source: "Source",
+        col_file: "Origin File",
+        col_action: "Action",
+        btn_view: "View",
+        inspector_title: "Forensic Origin Sheet",
+        inspector_empty_hint: "Click on a marker or a stop point on the map to inspect its exact traceability (source file, table, field, accuracy, speed).",
+        insp_coords: "GPS Coordinates:",
+        insp_utc: "UTC Date/Time:",
+        insp_local: "Local Date/Time:",
+        insp_acc: "Accuracy (Radius):",
+        insp_speed: "Estimated Speed:",
+        insp_alt: "Altitude:",
+        insp_file: "Source File:",
+        insp_table: "SQLite Table / Field:",
+        insp_unspecified: "Unspecified",
+        insp_meters: "meters",
+        insp_duplicates_title: "Identified Records / Duplicates:",
+        insp_resolve_address: "Resolve Postal Address",
+        airgap_blocked_msg: "Strict Offline Security Mode active: network transmission blocked to preserve investigation confidentiality. You can explicitly enable it in Settings.",
+        popup_recorded_events: "Recorded Events",
+        popup_same_loc: "Same Location",
+        popup_unknown_date: "Unknown date",
+        popup_inspect: "Inspect this event",
+        popup_file: "File:",
+        popup_acc: "Accuracy:",
+        popup_speed: "Estimated speed:",
+        popup_occurrences: "Occurrences in report:",
+        stop_title: "Stop Point / Stationary Dwell",
+        stop_prolonged: "Prolonged Stop",
+        stop_arrival: "Arrival:",
+        stop_departure: "Departure:",
+        stop_dwell: "Dwell time:",
+        stop_radius: "Radius:",
+        stop_fixes: "Recorded fixes:",
+        trip_card_dur: "Duration:",
+        trip_card_dist: "Distance:",
+        trip_card_avgspeed: "Avg Speed:",
+        trip_card_maxspeed: "Max Speed:",
+        trip_card_points: "points",
+        upload_title: "Import Mobile Extraction",
+        upload_drop_text: "Drag and drop your extraction archive here or click",
+        upload_formats: "Supports .ZIP, .TAR, .XLSX (UFED), .CSV, .DB, .GPX, .KML, Photos",
+        upload_local_title: "OR LOCAL DIRECTORY ON THIS COMPUTER",
+        upload_local_label: "Absolute uncompressed folder path:",
+        upload_btn_analyze: "Analyze",
+        settings_title: "Engine & Security Settings",
+        airgap_title: "Air-Gap Security Mode",
+        airgap_badge_active: "ACTIVE (Recommended)",
+        airgap_badge_disabled: "DISABLED (Online)",
+        airgap_desc: "Blocks any transmission of GPS coordinates to external servers (OpenStreetMap, etc.) to guarantee judicial confidentiality.",
+        airgap_checkbox: "Allow external online queries (address resolution)",
+        wigle_user_label: "WiGLE API Username (Optional)",
+        wigle_key_label: "WiGLE API Token / Key (Optional)",
+        mls_db_label: "Cell Towers MLS.db File (Optional, Offline)",
+        mbtiles_label: "Offline Map MBTiles File (Absolute or relative path)",
+        mbtiles_found: "File detected and valid",
+        mbtiles_not_found: "File not found at this location",
+        mbtiles_optional_hint: "Optional: specify path to an .mbtiles file",
+        layer_osm: "OpenStreetMap (Online)",
+        layer_offline: "Local Offline Map (Air-Gap)",
+        layer_sat: "Satellite HD View",
+        layer_dark: "Dark Map (Forensic)",
+        insp_resolve_wigle: "Lookup BSSID on WiGLE",
+        wigle_found_alert: "Wi-Fi access point geolocated by WiGLE!",
+        filter_day_selected: "Selected Day:",
+        filter_trip_num: "Trip #",
+        uploading_file: "Uploading",
+        scanning_folder: "Scanning folder",
+        btn_save: "Save"
+      }
+    };
+
+    let currentLang = localStorage.getItem('gt2m_lang') || localStorage.getItem('gps_finder_lang') || 'fr';
+
+    function t(key, fallback = '') {
+      if (I18N[currentLang] && I18N[currentLang][key]) {
+        return I18N[currentLang][key];
+      }
+      if (I18N['fr'] && I18N['fr'][key]) {
+        return I18N['fr'][key];
+      }
+      return fallback || key;
+    }
+
+    function setLanguage(lang) {
+      if (lang !== 'fr' && lang !== 'en') return;
+      currentLang = lang;
+      localStorage.setItem('gt2m_lang', lang);
+
+      const btnFr = document.getElementById('lang-btn-fr');
+      const btnEn = document.getElementById('lang-btn-en');
+      if (btnFr && btnEn) {
+        if (lang === 'fr') {
+          btnFr.className = 'px-2.5 py-1 text-xs font-bold rounded transition text-emerald-400 bg-slate-800 shadow-sm flex items-center gap-1';
+          btnEn.className = 'px-2.5 py-1 text-xs font-bold rounded transition text-slate-400 hover:text-white flex items-center gap-1';
+        } else {
+          btnEn.className = 'px-2.5 py-1 text-xs font-bold rounded transition text-emerald-400 bg-slate-800 shadow-sm flex items-center gap-1';
+          btnFr.className = 'px-2.5 py-1 text-xs font-bold rounded transition text-slate-400 hover:text-white flex items-center gap-1';
+        }
+      }
+
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const k = el.getAttribute('data-i18n');
+        if (k && I18N[currentLang] && I18N[currentLang][k]) {
+          el.textContent = I18N[currentLang][k];
+        }
+      });
+
+      document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const k = el.getAttribute('data-i18n-placeholder');
+        if (k && I18N[currentLang] && I18N[currentLang][k]) {
+          el.placeholder = I18N[currentLang][k];
+        }
+      });
+
+      document.querySelectorAll('[data-i18n-title]').forEach(el => {
+        const k = el.getAttribute('data-i18n-title');
+        if (k && I18N[currentLang] && I18N[currentLang][k]) {
+          el.title = I18N[currentLang][k];
+        }
+      });
+
+      const clusterBtn = document.getElementById('btn-cluster-text');
+      if (clusterBtn) {
+        clusterBtn.textContent = isClusteringActive ? t('mode_clusters') : t('mode_unfolded');
+      }
+
+      const accLabel = document.getElementById('acc-label');
+      if (accLabel && selectedAccuracy >= 5000) {
+        accLabel.textContent = t('accuracy_all');
+      }
+
+      const timelineLabel = document.getElementById('timeline-label');
+      if (timelineLabel && document.getElementById('timeline-range') && parseInt(document.getElementById('timeline-range').value) >= 100) {
+        timelineLabel.textContent = t('all_points');
+      }
+
+      const badge = document.getElementById('airgap-badge');
+      if (badge) {
+        const isOnline = document.getElementById('allow-online-check') && document.getElementById('allow-online-check').checked;
+        badge.textContent = isOnline ? t('airgap_badge_disabled') : t('airgap_badge_active');
+      }
+
+      if (lastSummary) {
+        updateSummaryUI(lastSummary);
+      }
+
+      renderDaysList();
+      renderTripsList();
+      renderStopPointsOnMap();
+      renderPoints(false);
+      renderTableData();
+
+      if (lastInspectedPoint) {
+        inspectPoint(lastInspectedPoint);
+      }
+    }
+
+    let map, markersLayer, heatLayer, polylineLayer, antPathLayer, stopPointsLayer;
+    let allPoints = [];
+    let currentPoints = [];
+    let analyticsData = { trips: [], days: {}, stop_points: [], total_distance_km: 0 };
+    let activeCategories = new Set();
+    let selectedAccuracy = 5000;
+    let selectedDay = null;
+    let selectedTripId = null;
+    let lastSummary = null;
+
+    let isHeatActive = false;
+    let isRouteActive = false;
+    let isAntPathActive = true;
+    let isStopsActive = true;
+    let isClusteringActive = true;
+    let isPlaying = false;
+    let playInterval = null;
+    let lastInspectedPoint = null;
+
+    const CATEGORY_COLORS = {
+      gps_fix: '#22c55e',
+      exif_photo: '#f97316',
+      system_routine: '#38bdf8',
+      wifi: '#eab308',
+      cell_tower: '#ef4444',
+      messaging: '#d946ef',
+      navigation: '#a855f7',
+      generic: '#94a3b8'
+    };
+
+    const CATEGORY_NAMES = {
+      fr: {
+        gps_fix: 'GPS Direct / Fix',
+        exif_photo: 'Photos & Médias EXIF',
+        system_routine: 'Système (CoreRoutine, Routine)',
+        wifi: 'Triangulation Wi-Fi',
+        cell_tower: 'Antenne Relais Cellulaire',
+        messaging: 'Messageries (WhatsApp, etc.)',
+        navigation: 'Navigation (Maps, Waze)',
+        generic: 'Autres Bases SQLite'
+      },
+      en: {
+        gps_fix: 'Direct GPS / Fix',
+        exif_photo: 'Photos & Media EXIF',
+        system_routine: 'System (CoreRoutine, Routine)',
+        wifi: 'Wi-Fi Triangulation',
+        cell_tower: 'Cellular Relay Towers',
+        messaging: 'Messengers (WhatsApp, etc.)',
+        navigation: 'Navigation (Maps, Waze)',
+        generic: 'Other SQLite Databases'
+      }
+    };
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initMap();
+      setupDropZone();
+      setLanguage(currentLang);
+      pollState();
+      setInterval(pollState, 2000);
+    });
+
+    function initMap() {
+      const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors', maxZoom: 19 });
+      const offlineTiles = L.tileLayer('/tiles/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap Hors-Ligne (Air-Gap)',
+        maxZoom: 19,
+        errorTileUrl: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><rect width="256" height="256" fill="%230f172a"/><text x="128" y="135" fill="%23334155" font-family="sans-serif" font-size="11" text-anchor="middle">Tuile Hors-Ligne</text></svg>'
+      });
+      const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles © Esri', maxZoom: 19 });
+      const dark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '© CARTO', maxZoom: 19 });
+
+      map = L.map('map', {
+        center: [46.2276, 2.2137],
+        zoom: 6,
+        layers: [osm]
+      });
+
+      const baseLayers = {};
+      baseLayers[t('layer_osm', 'OpenStreetMap (En ligne)')] = osm;
+      baseLayers[t('layer_offline', 'Carte Hors-Ligne Locale (Air-Gap)')] = offlineTiles;
+      baseLayers[t('layer_sat', 'Vue Satellite HD')] = satellite;
+      baseLayers[t('layer_dark', 'Carte Sombre (Forensic)')] = dark;
+
+      L.control.layers(baseLayers).addTo(map);
+
+      markersLayer = L.markerClusterGroup({
+        maxClusterRadius: 30,
+        disableClusteringAtZoom: 15,
+        spiderfyOnMaxZoom: true,
+        spiderfyDistanceMultiplier: 2.5,
+        showCoverageOnHover: false,
+        zoomToBoundsOnClick: true
+      });
+
+      // If a cluster is clicked and all points are at the exact same location, open the multi-event popup
+      markersLayer.on('clusterclick', function (a) {
+        const markers = a.layer.getAllChildMarkers();
+        if (markers.length > 0) {
+          const firstLatLng = markers[0].getLatLng();
+          const allSameLoc = markers.every(m => m.getLatLng().lat === firstLatLng.lat && m.getLatLng().lng === firstLatLng.lng);
+          if (allSameLoc || map.getZoom() >= 17) {
+            markers[0].openPopup();
+          }
+        }
+      });
+
+      map.addLayer(markersLayer);
+
+      stopPointsLayer = L.layerGroup();
+      map.addLayer(stopPointsLayer);
+
+      setTimeout(() => {
+        if (map) map.invalidateSize();
+      }, 200);
+    }
+
+    async function pollState() {
+      try {
+        const resp = await fetch('/api/state');
+        if (resp.ok) {
+          const state = await resp.json();
+          updateProgressUI(state.progress);
+          
+          if (state.points_count > 0 && allPoints.length !== state.points_count) {
+            analyticsData = state.analytics || {};
+            const isFirstLoad = (allPoints.length === 0);
+            await loadPoints(isFirstLoad);
+            updateSummaryUI(state.summary);
+            updateAnalyticsUI();
+          }
+
+          if (state.settings) {
+            const isOnline = !!state.settings.allow_online_lookups;
+            const chk = document.getElementById('allow-online-check');
+            if (chk) chk.checked = isOnline;
+            const badge = document.getElementById('airgap-badge');
+            if (badge) {
+              badge.textContent = isOnline ? t('airgap_badge_disabled') : t('airgap_badge_active');
+              badge.className = isOnline ? 'px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 font-bold text-[10px]' : 'px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold text-[10px]';
+            }
+            if (state.settings.mbtiles_path) {
+              const mbInp = document.getElementById('mbtiles-file');
+              if (mbInp && !mbInp.value) mbInp.value = state.settings.mbtiles_path;
+            }
+            const mbStatus = document.getElementById('mbtiles-status');
+            if (mbStatus) {
+              const mbInp = document.getElementById('mbtiles-file');
+              const val = mbInp ? mbInp.value.trim() : '';
+              if (state.settings.mbtiles_exists) {
+                mbStatus.innerHTML = `<span class="text-emerald-400 font-semibold flex items-center gap-1"><i class="fa-solid fa-circle-check"></i> ${t('mbtiles_found')} (${state.settings.mbtiles_size || 'OK'})</span>`;
+              } else if (val && val !== 'map.mbtiles') {
+                mbStatus.innerHTML = `<span class="text-amber-400 flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation"></i> ${t('mbtiles_not_found')}</span>`;
+              } else {
+                mbStatus.innerHTML = `<span class="text-slate-500 italic">${t('mbtiles_optional_hint')}</span>`;
+              }
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
+    function updateProgressUI(prog) {
+      const banner = document.getElementById('progress-banner');
+      if (prog && prog.active) {
+        banner.classList.remove('hidden');
+        document.getElementById('progress-status').textContent = prog.status;
+        document.getElementById('progress-bar').style.width = prog.percent + '%';
+        document.getElementById('progress-pct').textContent = prog.percent + '%';
+      } else {
+        banner.classList.add('hidden');
+      }
+    }
+
+    function updateSummaryUI(sum) {
+      if (!sum) return;
+      lastSummary = sum;
+      document.getElementById('stat-points').textContent = sum.valid_points.toLocaleString(currentLang === 'fr' ? 'fr-FR' : 'en-US');
+      renderCategoryFilters(sum.categories_count || {});
+    }
+
+    function updateAnalyticsUI() {
+      document.getElementById('stat-distance').textContent = `${analyticsData.total_distance_km || 0} km`;
+      document.getElementById('stat-speed').textContent = `${analyticsData.max_speed_kmh || 0} km/h`;
+      document.getElementById('stat-stops').textContent = (analyticsData.stop_points || []).length;
+
+      renderDaysList();
+      renderTripsList();
+      renderStopPointsOnMap();
+    }
+
+    function renderDaysList() {
+      const container = document.getElementById('days-list-container');
+      const days = analyticsData.days || {};
+      const dayKeys = Object.keys(days).sort();
+
+      if (dayKeys.length === 0) {
+        container.innerHTML = `<div class="text-slate-500 italic py-4 text-center">${t('no_days')}</div>`;
+        return;
+      }
+
+      container.innerHTML = '';
+      dayKeys.forEach(dk => {
+        const dInfo = days[dk];
+        const btn = document.createElement('div');
+        const isActive = selectedDay === dk;
+        btn.className = `p-2.5 rounded-lg border cursor-pointer transition flex items-center justify-between ${isActive ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300' : 'bg-slate-950/80 border-slate-800 hover:border-slate-700 text-slate-300'}`;
+        btn.onclick = () => selectDay(dk);
+        btn.innerHTML = `
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-calendar-day text-emerald-400"></i>
+            <span class="font-bold font-mono">${dk}</span>
+          </div>
+          <span class="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400 font-mono font-semibold">${dInfo.point_count} pts</span>
+        `;
+        container.appendChild(btn);
+      });
+    }
+
+    function renderTripsList() {
+      const container = document.getElementById('trips-list-container');
+      const trips = analyticsData.trips || [];
+
+      if (trips.length === 0) {
+        container.innerHTML = `<div class="text-slate-500 italic py-4 text-center">${t('no_trips')}</div>`;
+        return;
+      }
+
+      container.innerHTML = '';
+      trips.forEach(tr => {
+        const btn = document.createElement('div');
+        const isActive = selectedTripId === tr.trip_id;
+        btn.className = `p-2.5 rounded-xl border cursor-pointer transition space-y-1.5 ${isActive ? 'bg-sky-600/20 border-sky-500 text-sky-200' : 'bg-slate-950/80 border-slate-800 hover:border-slate-700 text-slate-300'}`;
+        btn.onclick = () => selectTrip(tr.trip_id);
+
+        btn.innerHTML = `
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-sky-400 text-xs flex items-center gap-1.5"><i class="fa-solid fa-route"></i> ${tr.name}</span>
+            <span class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400 font-mono text-[10px]">${tr.point_count} pts</span>
+          </div>
+          <div class="grid grid-cols-2 gap-1 text-[11px] text-slate-400">
+            <div>📏 <b>${t('trip_card_dist')}</b> ${tr.distance_km} km</div>
+            <div>⏱️ <b>${t('trip_card_dur')}</b> ${tr.duration_minutes} min</div>
+            <div>⚡ <b>${t('trip_card_avgspeed')}</b> ${tr.avg_speed_kmh} km/h</div>
+            <div>🚀 <b>${t('trip_card_maxspeed')}</b> ${tr.max_speed_kmh} km/h</div>
+          </div>
+        `;
+        container.appendChild(btn);
+      });
+    }
+
+    function renderStopPointsOnMap() {
+      stopPointsLayer.clearLayers();
+      if (!isStopsActive) return;
+
+      const stops = analyticsData.stop_points || [];
+      stops.forEach(st => {
+        const icon = L.divIcon({
+          className: 'custom-stop-icon',
+          html: `<div class="w-7 h-7 rounded-full bg-red-600 border-2 border-white shadow-lg flex items-center justify-center text-white text-[11px] font-bold">🛑</div>`,
+          iconSize: [28, 28],
+          iconAnchor: [14, 14]
+        });
+
+        const m = L.marker([st.latitude, st.longitude], { icon: icon });
+        m.bindPopup(`
+          <div class="text-xs p-1 font-sans">
+            <div class="font-bold text-sm text-red-400 mb-1 flex items-center gap-1.5"><i class="fa-solid fa-circle-stop"></i> ${t('stop_title')}</div>
+            <div class="text-slate-300 mb-1">⏱️ <b>${t('stop_dwell')}</b> <span class="text-amber-400 font-bold font-mono">${st.duration_str}</span> (${st.duration_minutes} min)</div>
+            <div class="text-slate-400 text-[11px]">🕒 <b>${t('stop_arrival')}</b> ${st.start_time_local || st.start_time}</div>
+            <div class="text-slate-400 text-[11px]">🏁 <b>${t('stop_departure')}</b> ${st.end_time_local || st.end_time}</div>
+            <div class="text-slate-400 text-[11px]">📍 <b>${t('stop_fixes')}</b> ${st.point_count} ${t('trip_card_points')}</div>
+            <div class="text-slate-400 font-mono text-[10px] mt-1">${st.latitude}, ${st.longitude}</div>
+          </div>
+        `);
+        stopPointsLayer.addLayer(m);
+      });
+    }
+
+    function renderCategoryFilters(catsCount) {
+      const container = document.getElementById('categories-container');
+      container.innerHTML = '';
+      activeCategories.clear();
+
+      Object.keys(catsCount).forEach(cat => {
+        activeCategories.add(cat);
+        const count = catsCount[cat];
+        const color = CATEGORY_COLORS[cat] || '#94a3b8';
+        const label = (CATEGORY_NAMES[currentLang] && CATEGORY_NAMES[currentLang][cat]) || (CATEGORY_NAMES['fr'] && CATEGORY_NAMES['fr'][cat]) || cat;
+
+        const row = document.createElement('label');
+        row.className = 'flex items-center justify-between p-2 rounded bg-slate-950/80 border border-slate-800 cursor-pointer hover:border-slate-700 text-xs';
+        row.innerHTML = `
+          <div class="flex items-center gap-2">
+            <input type="checkbox" checked value="${cat}" onchange="onCategoryToggle(this)" class="rounded bg-slate-900 border-slate-700 text-emerald-500 focus:ring-0">
+            <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${color}"></span>
+            <span class="text-slate-300 font-medium">${label}</span>
+          </div>
+          <span class="font-mono text-slate-400 font-semibold">${count}</span>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    async function loadPoints(autoFit = false) {
+      let url = '/api/points?';
+      if (selectedDay) url += `day=${selectedDay}&`;
+      if (selectedTripId !== null) url += `trip_id=${selectedTripId}&`;
+
+      const resp = await fetch(url);
+      if (resp.ok) {
+        allPoints = await resp.json();
+        currentPoints = [...allPoints];
+        renderPoints(autoFit);
+        renderTableData();
+      }
+    }
+
+    function selectDay(dayStr) {
+      selectedDay = dayStr;
+      selectedTripId = null;
+      updateFilterIndicator();
+      renderDaysList();
+      renderTripsList();
+      loadPoints(true);
+    }
+
+    function selectTrip(tripId) {
+      selectedTripId = tripId;
+      selectedDay = null;
+      updateFilterIndicator();
+      renderDaysList();
+      renderTripsList();
+      loadPoints(true);
+    }
+
+    function updateFilterIndicator() {
+      const ind = document.getElementById('active-filter-indicator');
+      const txt = document.getElementById('active-filter-text');
+      if (selectedDay) {
+        ind.classList.remove('hidden');
+        txt.textContent = `${t('filter_day_selected')} ${selectedDay}`;
+      } else if (selectedTripId !== null) {
+        ind.classList.remove('hidden');
+        const tr = (analyticsData.trips || []).find(t => t.trip_id === selectedTripId);
+        txt.textContent = tr ? tr.name : `${t('filter_trip_num')}${selectedTripId}`;
+      } else {
+        ind.classList.add('hidden');
+      }
+    }
+
+    function clearSpecificFilters() {
+      selectedDay = null;
+      selectedTripId = null;
+      updateFilterIndicator();
+      renderDaysList();
+      renderTripsList();
+      loadPoints();
+    }
+
+    function switchLeftTab(tab) {
+      ['filters', 'days', 'trips'].forEach(t => {
+        const btn = document.getElementById(`tab-btn-${t}`);
+        const content = document.getElementById(`tab-content-${t}`);
+        if (t === tab) {
+          btn.className = 'flex-1 py-2.5 text-center font-semibold text-emerald-400 border-b-2 border-emerald-500 transition';
+          content.classList.remove('hidden');
+        } else {
+          btn.className = 'flex-1 py-2.5 text-center font-medium text-slate-400 hover:text-slate-200 border-b-2 border-transparent transition';
+          content.classList.add('hidden');
+        }
+      });
+    }
+
+    function onCategoryToggle(cb) {
+      if (cb.checked) activeCategories.add(cb.value);
+      else activeCategories.delete(cb.value);
+      onFilterChange();
+    }
+
+    function onAccuracySlider(val) {
+      selectedAccuracy = parseInt(val);
+      document.getElementById('acc-label').textContent = selectedAccuracy >= 5000 ? t('accuracy_all') : `< ${selectedAccuracy} m`;
+      onFilterChange();
+    }
+
+    function onFilterChange() {
+      const search = document.getElementById('search-input').value.toLowerCase().trim();
+
+      currentPoints = allPoints.filter(p => {
+        if (!activeCategories.has(p.category)) return false;
+        if (selectedAccuracy < 5000 && p.accuracy && p.accuracy > selectedAccuracy) return false;
+        if (search) {
+          const str = `${p.source_type} ${p.source_file} ${p.table_or_field || ''} ${p.address || ''} ${JSON.stringify(p.extra_data || {})}`.toLowerCase();
+          if (!str.includes(search)) return false;
+        }
+        return true;
+      });
+
+      renderPoints();
+      renderTableData();
+    }
+
+    function renderPoints(autoFit = false) {
+      markersLayer.clearLayers();
+      if (heatLayer) map.removeLayer(heatLayer);
+      if (polylineLayer) map.removeLayer(polylineLayer);
+      if (antPathLayer) map.removeLayer(antPathLayer);
+
+      const latlngs = [];
+      const heatCoords = [];
+
+      // Group points sharing the exact same coordinates
+      const locationMap = new Map();
+      currentPoints.forEach(p => {
+        const key = `${p.latitude.toFixed(6)},${p.longitude.toFixed(6)}`;
+        if (!locationMap.has(key)) {
+          locationMap.set(key, []);
+        }
+        locationMap.get(key).push(p);
+      });
+
+      locationMap.forEach((ptsAtLoc, key) => {
+        const firstPt = ptsAtLoc[0];
+        const latlng = [firstPt.latitude, firstPt.longitude];
+        latlngs.push(latlng);
+        heatCoords.push([firstPt.latitude, firstPt.longitude, Math.min(1.0, 0.4 + 0.2 * ptsAtLoc.length)]);
+
+        const isMulti = ptsAtLoc.length > 1;
+        const color = isMulti ? '#3b82f6' : (CATEGORY_COLORS[firstPt.category] || '#94a3b8');
+
+        const marker = L.circleMarker(latlng, {
+          radius: isMulti ? 9 : 7,
+          fillColor: color,
+          color: isMulti ? '#fbbf24' : '#ffffff',
+          weight: isMulti ? 2.5 : 1.5,
+          opacity: 1,
+          fillOpacity: 0.9
+        });
+
+        marker.on('click', () => {
+          inspectPoint(ptsAtLoc[0]);
+        });
+
+        let popupContent = '';
+        if (isMulti) {
+          popupContent = `
+            <div class="text-xs p-1 max-w-sm font-sans space-y-2">
+              <div class="font-bold text-sm text-amber-400 flex items-center justify-between pb-1.5 border-b border-slate-700">
+                <span><i class="fa-solid fa-layer-group text-amber-400 mr-1"></i> ${ptsAtLoc.length} ${t('popup_recorded_events')}</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold font-mono">${t('popup_same_loc')}</span>
+              </div>
+              <div class="max-h-60 overflow-y-auto custom-scrollbar space-y-2.5 divide-y divide-slate-800 pr-1">
+                ${ptsAtLoc.map((p, pIdx) => `
+                  <div class="pt-2 first:pt-0 space-y-1">
+                    <div class="flex items-center justify-between">
+                      <span class="font-bold text-emerald-400">#${pIdx + 1} • ${p.source_type}</span>
+                      <span class="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300">${p.device_os || 'OS'}</span>
+                    </div>
+                    <div class="text-slate-200 font-mono text-[11px]">📅 ${p.timestamp_local || p.timestamp_utc || t('popup_unknown_date')}</div>
+                    <div class="text-slate-400 text-[10px] truncate max-w-xs">📁 ${p.source_file}</div>
+                    <div class="flex items-center gap-3 text-[10px] text-slate-400">
+                      <span>📍 ${t('popup_acc')} ${p.accuracy ? p.accuracy + ' m' : '-'}</span>
+                      ${p.speed && (p.accuracy === null || p.accuracy === undefined || p.accuracy <= 25) ? `<span class="text-amber-400 font-mono font-semibold">⚡ ${p.speed} km/h</span>` : ''}
+                    </div>
+                    <button onclick="inspectPointById('${p.id}')" class="w-full py-1 text-center bg-slate-800 hover:bg-emerald-600/30 text-emerald-400 rounded border border-slate-700 font-semibold text-[11px] mt-1 transition">
+                      <i class="fa-solid fa-fingerprint mr-1"></i> ${t('popup_inspect')}
+                    </button>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        } else {
+          const p = firstPt;
+          let photoHtml = '';
+          if (p.extra_data && p.extra_data.Thumbnail) {
+            photoHtml = `<img src="${p.extra_data.Thumbnail}" class="w-full h-24 object-cover rounded mt-2 border border-slate-700">`;
+          }
+
+          let occHtml = '';
+          if (p.extra_data && p.extra_data.Occurrences && p.extra_data.Occurrences.length > 1) {
+            occHtml = `
+              <div class="mt-1.5 p-1.5 bg-slate-900/90 rounded border border-emerald-500/30 text-[10px]">
+                <div class="font-bold text-emerald-400 mb-0.5"><i class="fa-solid fa-clone mr-1"></i> ${p.extra_data.Occurrences.length} ${t('popup_occurrences')}</div>
+                <div class="text-slate-300">${p.extra_data.Occurrences.join(', ')}</div>
+              </div>
+            `;
+          }
+
+          popupContent = `
+            <div class="text-xs p-1 max-w-xs font-sans">
+              <div class="font-bold text-sm text-emerald-400 mb-1 flex items-center justify-between">
+                <span>${p.source_type}</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">${p.device_os || 'OS'}</span>
+              </div>
+              <div class="text-slate-300 font-mono text-[11px] mb-1">📅 ${p.timestamp_local || p.timestamp_utc || t('popup_unknown_date')}</div>
+              <div class="text-slate-400 text-[11px]">📁 <b>${t('popup_file')}</b> ${p.source_file}</div>
+              <div class="text-slate-400 text-[11px]">📍 <b>${t('popup_acc')}</b> ${p.accuracy !== null && p.accuracy !== undefined ? p.accuracy + ' m' : t('insp_unspecified')}</div>
+              ${p.speed && (p.accuracy === null || p.accuracy === undefined || p.accuracy <= 25) ? `<div class="text-amber-400 font-mono text-[11px]">⚡ <b>${t('popup_speed')}</b> ${p.speed} km/h</div>` : ''}
+              ${occHtml}
+              ${photoHtml}
+            </div>
+          `;
+        }
+
+        marker.bindPopup(popupContent);
+        markersLayer.addLayer(marker);
+
+        if (firstPt.accuracy && firstPt.accuracy > 15 && firstPt.accuracy < 2000) {
+          const accCircle = L.circle(latlng, {
+            radius: firstPt.accuracy,
+            color: color,
+            weight: 1,
+            fillColor: color,
+            fillOpacity: 0.1,
+            interactive: false
+          });
+          markersLayer.addLayer(accCircle);
+        }
+      });
+
+      if (autoFit && latlngs.length > 0) {
+        map.fitBounds(L.latLngBounds(latlngs), { padding: [40, 40] });
+      }
+
+      // Heatmap
+      heatLayer = L.heatLayer(heatCoords, { radius: 25, blur: 15, maxZoom: 17 });
+      if (isHeatActive) heatLayer.addTo(map);
+
+      // Simple Polyline
+      polylineLayer = L.polyline(latlngs, { color: '#38bdf8', weight: 2.5, opacity: 0.8 });
+      if (isRouteActive) polylineLayer.addTo(map);
+
+      // Ant Path (Directional Animated Path)
+      if (L.polyline.antPath) {
+        antPathLayer = L.polyline.antPath(latlngs, {
+          paused: false,
+          reverse: false,
+          delay: 800,
+          dashArray: [10, 20],
+          weight: 4,
+          color: '#10b981',
+          pulseColor: '#ffffff',
+          opacity: 0.85
+        });
+        if (isAntPathActive && latlngs.length > 1) antPathLayer.addTo(map);
+      }
+    }
+
+    function renderTableData() {
+      const tbody = document.getElementById('table-body');
+      document.getElementById('table-count').textContent = currentPoints.length;
+      tbody.innerHTML = '';
+
+      currentPoints.slice(0, 500).forEach((p, idx) => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-800/80 cursor-pointer transition';
+        tr.onclick = () => {
+          map.setView([p.latitude, p.longitude], 17);
+          inspectPoint(p);
+        };
+        tr.innerHTML = `
+          <td class="p-2 text-slate-500">${idx + 1}</td>
+          <td class="p-2 text-slate-200">${p.timestamp_local || p.timestamp_utc || 'N/A'}</td>
+          <td class="p-2 text-emerald-400 font-bold">${p.latitude}</td>
+          <td class="p-2 text-emerald-400 font-bold">${p.longitude}</td>
+          <td class="p-2 text-slate-300">${p.accuracy ? p.accuracy + ' m' : '-'}</td>
+          <td class="p-2 text-amber-400">${p.speed && (p.accuracy === null || p.accuracy === undefined || p.accuracy <= 25) ? p.speed + ' km/h' : '-'}</td>
+          <td class="p-2 font-sans text-slate-300">${p.source_type}</td>
+          <td class="p-2 font-sans text-slate-400 truncate max-w-xs">${p.source_file}</td>
+          <td class="p-2"><button class="px-2 py-0.5 rounded bg-emerald-600/30 text-emerald-400 hover:bg-emerald-600/50">${t('btn_view')}</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function inspectPoint(p) {
+      lastInspectedPoint = p;
+      const container = document.getElementById('inspector-body');
+      let extraHtml = '';
+      if (p.extra_data) {
+        for (const [k, v] of Object.entries(p.extra_data)) {
+          if (k !== 'Thumbnail' && k !== 'Occurrences') {
+            extraHtml += `<div><span class="text-slate-400">${k} :</span> <span class="text-slate-200 font-mono">${v}</span></div>`;
+          }
+        }
+      }
+
+      let thumbHtml = '';
+      if (p.extra_data && p.extra_data.Thumbnail) {
+        thumbHtml = `<div class="mt-2"><img src="${p.extra_data.Thumbnail}" class="rounded border border-slate-700 max-h-48 mx-auto shadow-md"></div>`;
+      }
+
+      let bssidVal = p.extra_data ? (p.extra_data.BSSID_MAC || p.extra_data.BSSID || p.extra_data.MAC) : null;
+      let wigleSection = '';
+      if (bssidVal && bssidVal !== 'Inconnu') {
+        wigleSection = `
+          <div id="wigle-box-${p.id}" class="mt-2 p-2 rounded bg-slate-950 border border-slate-800">
+            ${p.extra_data && p.extra_data.WiGLE_Coordinates ? `
+              <div class="text-xs space-y-1">
+                <div class="text-sky-400 font-semibold flex items-center gap-1"><i class="fa-solid fa-wifi"></i> WiGLE : ${p.extra_data.WiGLE_SSID || ''}</div>
+                <div class="text-slate-300 font-mono text-[11px]">${p.extra_data.WiGLE_Coordinates}</div>
+              </div>
+            ` : `
+              <button onclick="requestWigle('${p.id}', '${bssidVal}')" class="w-full py-1 bg-slate-800 hover:bg-slate-700 rounded text-sky-400 border border-slate-700 font-semibold flex items-center justify-center gap-1">
+                <i class="fa-solid fa-wifi"></i> ${t('insp_resolve_wigle')}
+              </button>
+            `}
+          </div>
+        `;
+      }
+
+      let addressSection = `
+        <div id="addr-box-${p.id}" class="mt-2 p-2 rounded bg-slate-950 border border-slate-800">
+          ${p.address ? `<div class="text-slate-300 font-medium"><i class="fa-solid fa-house-chimney text-emerald-400 mr-1"></i> ${p.address}</div>` :
+          `<button onclick="requestGeocode('${p.id}')" class="w-full py-1 bg-slate-800 hover:bg-slate-700 rounded text-emerald-400 border border-slate-700 font-semibold flex items-center justify-center gap-1">
+            <i class="fa-solid fa-magnifying-glass-location"></i> ${t('insp_resolve_address')}
+          </button>`}
+        </div>
+      `;
+
+      container.innerHTML = `
+        <div class="space-y-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
+          <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+            <span class="font-bold text-emerald-400 text-sm">${p.source_type}</span>
+            <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-semibold">${p.device_os}</span>
+          </div>
+          <div><span class="text-slate-400">${t('insp_coords')}</span> <span class="text-slate-200 font-mono font-bold">${p.latitude}, ${p.longitude}</span></div>
+          <div><span class="text-slate-400">${t('insp_utc')}</span> <span class="text-slate-200 font-mono">${p.timestamp_utc || 'N/A'}</span></div>
+          <div><span class="text-slate-400">${t('insp_local')}</span> <span class="text-slate-200 font-mono">${p.timestamp_local || 'N/A'}</span></div>
+          <div><span class="text-slate-400">${t('insp_acc')}</span> <span class="text-emerald-400 font-semibold">${p.accuracy !== null && p.accuracy !== undefined ? p.accuracy + ' ' + t('insp_meters') : t('insp_unspecified')}</span></div>
+          ${p.speed && (p.accuracy === null || p.accuracy === undefined || p.accuracy <= 25) ? `<div><span class="text-slate-400">${t('insp_speed')}</span> <span class="text-amber-400 font-bold font-mono">${p.speed} km/h</span></div>` : ''}
+          <div><span class="text-slate-400">${t('insp_alt')}</span> <span class="text-slate-200 font-mono">${p.altitude ? p.altitude + ' m' : 'N/A'}</span></div>
+          <div><span class="text-slate-400">${t('insp_file')}</span> <span class="text-slate-300 font-mono text-[10px] break-all block bg-slate-900 p-1.5 rounded mt-0.5 border border-slate-800">${p.source_file}</span></div>
+          <div><span class="text-slate-400">${t('insp_table')}</span> <span class="text-slate-300 font-mono">${p.table_or_field || 'N/A'}</span></div>
+          ${p.extra_data && p.extra_data.Occurrences && p.extra_data.Occurrences.length > 1 ? `
+            <div class="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/40 space-y-1">
+              <div class="font-bold text-emerald-300 text-xs flex items-center gap-1.5">
+                <i class="fa-solid fa-clone text-emerald-400"></i> ${p.extra_data.Occurrences.length} ${t('insp_duplicates_title')}
+              </div>
+              <ul class="list-disc list-inside text-[11px] text-emerald-200/90 space-y-0.5 font-mono">
+                ${p.extra_data.Occurrences.map(o => `<li>${o}</li>`).join('')}
+              </ul>
+            </div>
+          ` : ''}
+          ${extraHtml}
+          ${wigleSection}
+          ${addressSection}
+          ${thumbHtml}
+        </div>
+      `;
+    }
+
+    function inspectPointById(ptId) {
+      const pt = allPoints.find(p => p.id === ptId);
+      if (pt) {
+        document.getElementById('inspector').classList.remove('hidden');
+        inspectPoint(pt);
+      }
+    }
+
+    async function requestGeocode(ptId) {
+      const fd = new FormData();
+      fd.append('point_id', ptId);
+      const resp = await fetch('/api/reverse-geocode', { method: 'POST', body: fd });
+      if (resp.ok) {
+        const res = await resp.json();
+        const pt = allPoints.find(p => p.id === ptId);
+        if (pt) pt.address = res.address;
+        inspectPoint(pt);
+      } else if (resp.status === 403) {
+        const err = await resp.json();
+        alert(err.detail || t('airgap_blocked_msg'));
+      }
+    }
+
+    async function requestWigle(ptId, bssid) {
+      const fd = new FormData();
+      fd.append('bssid', bssid);
+      fd.append('point_id', ptId);
+      const resp = await fetch('/api/wigle-lookup', { method: 'POST', body: fd });
+      if (resp.ok) {
+        const res = await resp.json();
+        const pt = allPoints.find(p => p.id === ptId);
+        if (pt) {
+          if (!pt.extra_data) pt.extra_data = {};
+          pt.extra_data.WiGLE_SSID = res.ssid || 'Inconnu';
+          pt.extra_data.WiGLE_Coordinates = `${res.latitude}, ${res.longitude}`;
+          inspectPoint(pt);
+        }
+        alert(`${t('wigle_found_alert')}\nSSID: ${res.ssid || 'N/A'}\nGPS: ${res.latitude}, ${res.longitude}`);
+      } else {
+        const err = await resp.json();
+        alert(err.detail || err.message || t('airgap_blocked_msg'));
+      }
+    }
+
+    function toggleAntPath() {
+      isAntPathActive = !isAntPathActive;
+      const btn = document.getElementById('btn-antpath');
+      if (isAntPathActive) {
+        btn.classList.add('bg-emerald-500/20', 'border-emerald-500/40', 'text-emerald-400');
+        if (antPathLayer) antPathLayer.addTo(map);
+      } else {
+        btn.classList.remove('bg-emerald-500/20', 'border-emerald-500/40', 'text-emerald-400');
+        if (antPathLayer) map.removeLayer(antPathLayer);
+      }
+    }
+
+    function toggleStopPoints() {
+      isStopsActive = !isStopsActive;
+      const btn = document.getElementById('btn-stops');
+      if (isStopsActive) {
+        btn.classList.add('bg-red-500/20', 'border-red-500/40', 'text-red-400');
+        renderStopPointsOnMap();
+      } else {
+        btn.classList.remove('bg-red-500/20', 'border-red-500/40', 'text-red-400');
+        stopPointsLayer.clearLayers();
+      }
+    }
+
+    function toggleHeatmap() {
+      isHeatActive = !isHeatActive;
+      const btn = document.getElementById('btn-heat');
+      if (isHeatActive) {
+        btn.classList.add('bg-orange-500/20', 'border-orange-500/40', 'text-orange-400');
+        if (heatLayer) heatLayer.addTo(map);
+      } else {
+        btn.classList.remove('bg-orange-500/20', 'border-orange-500/40', 'text-orange-400');
+        if (heatLayer) map.removeLayer(heatLayer);
+      }
+    }
+
+    function togglePolyline() {
+      isRouteActive = !isRouteActive;
+      const btn = document.getElementById('btn-route');
+      if (isRouteActive) {
+        btn.classList.add('bg-sky-500/20', 'border-sky-500/40', 'text-sky-400');
+        if (polylineLayer) polylineLayer.addTo(map);
+      } else {
+        btn.classList.remove('bg-sky-500/20', 'border-sky-500/40', 'text-sky-400');
+        if (polylineLayer) map.removeLayer(polylineLayer);
+      }
+    }
+
+    function toggleClustering() {
+      isClusteringActive = !isClusteringActive;
+      const btn = document.getElementById('btn-cluster');
+      map.removeLayer(markersLayer);
+
+      if (isClusteringActive) {
+        btn.innerHTML = `<i class="fa-solid fa-circle-nodes text-emerald-400"></i> <span id="btn-cluster-text">${t('mode_clusters')}</span>`;
+        btn.classList.remove('bg-amber-500/20', 'border-amber-500/40', 'text-amber-300');
+        markersLayer = L.markerClusterGroup({
+          maxClusterRadius: 30,
+          disableClusteringAtZoom: 15,
+          spiderfyOnMaxZoom: true,
+          spiderfyDistanceMultiplier: 2.5,
+          showCoverageOnHover: false,
+          zoomToBoundsOnClick: true
+        });
+        markersLayer.on('clusterclick', function (a) {
+          const markers = a.layer.getAllChildMarkers();
+          if (markers.length > 0) {
+            markers[0].openPopup();
+          }
+        });
+      } else {
+        btn.innerHTML = `<i class="fa-solid fa-location-dot text-amber-400"></i> <span id="btn-cluster-text">${t('mode_unfolded')}</span>`;
+        btn.classList.add('bg-amber-500/20', 'border-amber-500/40', 'text-amber-300');
+        markersLayer = L.featureGroup();
+      }
+
+      map.addLayer(markersLayer);
+      renderPoints(false);
+    }
+
+    function toggleTableDrawer() {
+      const drawer = document.getElementById('table-drawer');
+      drawer.classList.toggle('hidden');
+    }
+
+    function onTimelineSlider(val) {
+      const pct = parseInt(val);
+      if (pct >= 100) {
+        document.getElementById('timeline-label').textContent = t('all_points');
+        currentPoints = [...allPoints];
+      } else {
+        const count = Math.max(1, Math.floor((pct / 100) * allPoints.length));
+        currentPoints = allPoints.slice(0, count);
+        const lastPt = currentPoints[currentPoints.length - 1];
+        document.getElementById('timeline-label').textContent = lastPt.timestamp_utc || `${t('point_num')}${count}`;
+      }
+      renderPoints();
+    }
+
+    function togglePlay() {
+      isPlaying = !isPlaying;
+      const btnIcon = document.getElementById('play-icon');
+      const slider = document.getElementById('timeline-range');
+
+      if (isPlaying) {
+        btnIcon.classList.remove('fa-play');
+        btnIcon.classList.add('fa-pause');
+        let currentVal = parseInt(slider.value);
+        if (currentVal >= 100) currentVal = 0;
+
+        playInterval = setInterval(() => {
+          currentVal += 2;
+          if (currentVal > 100) {
+            currentVal = 100;
+            togglePlay();
+          }
+          slider.value = currentVal;
+          onTimelineSlider(currentVal);
+        }, 200);
+      } else {
+        btnIcon.classList.remove('fa-pause');
+        btnIcon.classList.add('fa-play');
+        if (playInterval) clearInterval(playInterval);
+      }
+    }
+
+    function setupDropZone() {
+      const dz = document.getElementById('drop-zone');
+      const fi = document.getElementById('file-input');
+
+      dz.onclick = () => fi.click();
+      dz.ondragover = (e) => { e.preventDefault(); dz.classList.add('border-emerald-500'); };
+      dz.ondragleave = () => dz.classList.remove('border-emerald-500');
+      dz.ondrop = (e) => {
+        e.preventDefault();
+        dz.classList.remove('border-emerald-500');
+        if (e.dataTransfer.files.length > 0) {
+          handleFileSelect(e.dataTransfer.files);
+        }
+      };
+    }
+
+    async function handleFileSelect(files) {
+      if (!files || files.length === 0) return;
+      closeUploadModal();
+      const fd = new FormData();
+      fd.append('file', files[0]);
+
+      document.getElementById('progress-banner').classList.remove('hidden');
+      document.getElementById('progress-status').textContent = `${t('uploading_file')} ${files[0].name}...`;
+
+      await fetch('/api/upload', { method: 'POST', body: fd });
+    }
+
+    async function submitLocalFolder() {
+      const path = document.getElementById('folder-path-input').value.trim();
+      if (!path) return;
+      closeUploadModal();
+
+      const fd = new FormData();
+      fd.append('folder_path', path);
+
+      document.getElementById('progress-banner').classList.remove('hidden');
+      document.getElementById('progress-status').textContent = `${t('scanning_folder')} ${path}...`;
+
+      await fetch('/api/scan-local-folder', { method: 'POST', body: fd });
+    }
+
+    function openUploadModal() { document.getElementById('upload-modal').classList.remove('hidden'); }
+    function closeUploadModal() { document.getElementById('upload-modal').classList.add('hidden'); }
+    function openSettingsModal() { document.getElementById('settings-modal').classList.remove('hidden'); }
+    function closeSettingsModal() { document.getElementById('settings-modal').classList.add('hidden'); }
+    function closeInspector() { document.getElementById('inspector').classList.add('hidden'); }
+    function toggleExportMenu() { document.getElementById('export-dropdown').classList.toggle('hidden'); }
+
+    function fitMapBounds() {
+      const latlngs = currentPoints.map(p => [p.latitude, p.longitude]);
+      if (latlngs.length > 0) {
+        map.fitBounds(L.latLngBounds(latlngs), { padding: [40, 40] });
+      }
+    }
+
+    async function reloadWorkspaceFile() {
+      const resp = await fetch('/api/reload', { method: 'POST' });
+      if (resp.ok) {
+        allPoints = [];
+        currentPoints = [];
+        await pollState();
+      }
+    }
+
+    async function saveSettings() {
+      const fd = new FormData();
+      const allowOnline = document.getElementById('allow-online-check').checked;
+      fd.append('allow_online', allowOnline ? 'true' : 'false');
+      fd.append('wigle_name', document.getElementById('wigle-name').value);
+      fd.append('wigle_key', document.getElementById('wigle-key').value);
+      fd.append('mls_db_path', document.getElementById('mls-db').value);
+      fd.append('mbtiles_path', document.getElementById('mbtiles-file').value);
+      await fetch('/api/settings', { method: 'POST', body: fd });
+      await pollState();
+      closeSettingsModal();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,52 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Forensic Evidence & Raw Data Files (CRITICAL: NEVER LEAK EVIDENCE)
+*.xlsx
+*.xls
+*.csv
+*.tsv
+*.sqlite
+*.sqlite3
+*.db
+*.db3
+*.mapsdata
+*.zip
+*.tar
+*.gz
+*.7z
+*.rar
+*.bin
+*.raw
+
+# Exports & Case Reports
+exports/
+*.kml
+*.gpx
+
+# Local environments & editor settings
+.env
+.venv
+env/
+venv/
+ENV/
+.vscode/
+.idea/
+
+# Local Settings & API Keys (CRITICAL: DO NOT COMMIT SENSITIVE KEYS)
+settings.json
+
+# Offline Maps & Tiles (Large binary files)
+*.mbtiles
+tiles/
+MLS.db
+
+# Operating System Files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.tmp
+temp_*
