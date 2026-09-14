@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 GeoTrace2Map (GT2M) - Generic Heuristic SQLite Scraper
 Discovers and extracts geolocation data from any unknown SQLite database table.
@@ -19,6 +19,12 @@ def scrape_generic_sqlite(db_path: str, source_display_path: str, hint_os: str =
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
+        
+        # Merge uncommitted WAL frames if present
+        try:
+            cur.execute("PRAGMA wal_checkpoint(PASSIVE)")
+        except Exception:
+            pass
         
         cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
         tables = [r[0] for r in cur.fetchall()]

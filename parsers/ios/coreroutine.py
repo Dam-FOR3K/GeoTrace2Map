@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 GeoTrace2Map (GT2M) - iOS CoreRoutine.sqlite Parser
 Extracts Apple CoreRoutine artifacts: Significant Locations, Visits, Learned Locations, Vehicle Events.
@@ -19,6 +19,12 @@ def parse_coreroutine_db(db_path: str, source_display_path: str) -> List[Forensi
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
+        
+        # Merge any uncommitted Write-Ahead Log frames
+        try:
+            cur.execute("PRAGMA wal_checkpoint(PASSIVE)")
+        except Exception:
+            pass
         
         # Check available tables
         cur.execute("SELECT name FROM sqlite_master WHERE type='table'")

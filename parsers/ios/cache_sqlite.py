@@ -53,10 +53,33 @@ def parse_ios_cache_sqlite(db_path: str, source_display_path: str) -> List[Foren
     if not os.path.exists(db_path):
         return points
 
+    # ==========================================================
+    # Step 1: Forensic Carving of accompanying Write-Ahead Log (-wal)
+    # Read WAL binary BEFORE SQLite connection can truncate or checkpoint it
+    # ==========================================================
+    seen_coords = set()
+    wal_candidates = [
+        db_path + "-wal",
+        os.path.splitext(db_path)[0] + ".sqlite-wal",
+        os.path.splitext(db_path)[0] + "-wal"
+    ]
+    for w_path in wal_candidates:
+        if os.path.exists(w_path) and os.path.getsize(w_path) > 0:
+            carved_pts = _carve_wal_file(w_path, source_display_path, seen_coords)
+            if carved_pts:
+                points.extend(carved_pts)
+            break
+
     try:
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
+
+        # Force passive WAL checkpoint to merge any pending journal frames
+        try:
+            cur.execute("PRAGMA wal_checkpoint(PASSIVE)")
+        except Exception:
+            pass
 
         cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
         tables = set(r[0] for r in cur.fetchall())
@@ -210,3 +233,54 @@ def parse_ios_cache_sqlite(db_path: str, source_display_path: str) -> List[Foren
         points = scrape_generic_sqlite(db_path, source_display_path, hint_os="iOS")
 
     return points
+
+def _carve_wal_file(wal_path: str, source_display_path: str, seen_coords: set) -> List[ForensicLocationPoint]:
+    """Carves uncommitted, deleted, or un-checkpointed URLs and coordinates from binary WAL frames."""
+    carved: List[ForensicLocationPoint] = []
+    try:
+        with open(wal_path, "rb") as f:
+            data = f.read()
+
+        # Search for HTTP/HTTPS URLs inside WAL pages
+        url_matches = re.finditer(rb'https?://[^\s\x00-\x1f\x7f-\xff"\'<>]{10,500}', data)
+        for m in url_matches:
+            try:
+                raw_url = m.group(0).decode('utf-8', errors='ignore')
+                decoded_url = urllib.parse.unquote(raw_url)
+                for idx, pat in enumerate(COORD_URL_PATTERNS):
+                    m_coord = pat.search(decoded_url)
+                    if m_coord:
+                        if idx == 1:
+                            raw_lon, raw_lat = float(m_coord.group(1)), float(m_coord.group(2))
+                        else:
+                            raw_lat, raw_lon = float(m_coord.group(1)), float(m_coord.group(2))
+
+                        valid, s_lat, s_lon = validate_coordinates(raw_lat, raw_lon)
+                        coord_key = (round(s_lat, 5), round(s_lon, 5))
+                        if valid and coord_key not in seen_coords:
+                            seen_coords.add(coord_key)
+                            carved.append(ForensicLocationPoint(
+                                latitude=s_lat,
+                                longitude=s_lon,
+                                accuracy=35.0,
+                                timestamp_raw=None,
+                                timestamp_utc=None,
+                                timestamp_local=None,
+                                epoch_type=None,
+                                source_file=source_display_path + "-wal",
+                                source_type="iOS Cache.sqlite-wal (Carved WAL Frame)",
+                                category="system_routine",
+                                table_or_field="WAL Journal Frame (Carved)",
+                                device_os="iOS",
+                                confidence="medium",
+                                extra_data={
+                                    "Carved_URL": raw_url[:200],
+                                    "Origine": "SQLite Write-Ahead Log (WAL)"
+                                }
+                            ))
+                            break
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return carved

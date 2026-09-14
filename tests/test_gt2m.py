@@ -124,13 +124,21 @@ def create_synthetic_test_zip(output_zip_path: str):
         conn.commit()
         conn.close()
 
+        # 7. Create simulated Cache.sqlite-wal containing an uncommitted/carved URL
+        wal_file_path = cache_db_path + "-wal"
+        with open(wal_file_path, "wb") as wf:
+            # Write binary WAL padding and an embedded URL
+            wf.write(b"\x37\x7f\x06\x82" + b"\x00" * 256)
+            wf.write(b"GET https://maps.apple.com/?lat=44.8378&lon=-0.5792&mode=driving HTTP/1.1\r\nHost: maps.apple.com\r\n")
+            wf.write(b"\x00" * 512)
+
         # Pack into ZIP
         with zipfile.ZipFile(output_zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
             for root, _, files in os.walk(temp_dir):
                 for f in files:
                     full_p = os.path.join(root, f)
                     rel_p = os.path.relpath(full_p, temp_dir)
-                    zf.write(full_p, rel_p)
+                    zf.write(full_p, rel_p.replace('\\', '/'))
     finally:
         import shutil
         shutil.rmtree(temp_dir, ignore_errors=True)

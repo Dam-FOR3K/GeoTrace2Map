@@ -99,6 +99,11 @@ class ForensicExtractorEngine:
             for idx, (full_p, rel_p) in enumerate(all_files):
                 fname = os.path.basename(full_p).lower()
                 fext = os.path.splitext(full_p)[1].lower()
+                
+                # Skip standalone SQLite journal/wal files (they are processed with their parent database)
+                if fname.endswith(('-wal', '-shm', '-journal')):
+                    continue
+                    
                 file_pts = []
                 
                 # Check for specialized parsers
