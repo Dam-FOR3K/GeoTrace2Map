@@ -105,8 +105,24 @@ def create_synthetic_test_zip(output_zip_path: str):
         gps_ifd[3] = 'E'                           # GPSLongitudeRef
         gps_ifd[4] = (2.0, 21.0, 7.0)              # GPSLongitude (DMS)
         gps_ifd[29] = '2023:07:15'                 # GPSDateStamp
-        exif[ExifTags.Base.DateTime] = '2023:07:15 10:30:00'
         img.save(img_path, "jpeg", exif=exif)
+
+        # 6. Create simulated iOS NSURLCache Cache.sqlite
+        cache_dir = os.path.join(temp_dir, "private", "var", "mobile", "Containers", "Data", "Application", "TEST_UUID", "Library", "Caches", "com.example.app")
+        os.makedirs(cache_dir, exist_ok=True)
+        cache_db_path = os.path.join(cache_dir, "Cache.sqlite")
+        conn = sqlite3.connect(cache_db_path)
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE cfurl_cache_response (
+                entry_ID INTEGER PRIMARY KEY,
+                request_key TEXT,
+                time_stamp REAL
+            )
+        """)
+        cur.execute("INSERT INTO cfurl_cache_response VALUES (1, 'https://api.example.com/search?lat=43.6047&lon=1.4442&radius=100', 700030000.0)")
+        conn.commit()
+        conn.close()
 
         # Pack into ZIP
         with zipfile.ZipFile(output_zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:

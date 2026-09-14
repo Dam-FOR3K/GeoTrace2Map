@@ -16,6 +16,7 @@ from parsers.ios.coreroutine import parse_coreroutine_db
 from parsers.ios.locationd import parse_locationd_db
 from parsers.ios.photos import parse_photos_db
 from parsers.ios.apple_maps import parse_apple_maps_db
+from parsers.ios.cache_sqlite import parse_ios_cache_sqlite
 from parsers.android.google_location import parse_android_location_db
 from parsers.android.google_maps import parse_android_maps_db
 from parsers.android.telephony import parse_android_telephony_db
@@ -105,6 +106,8 @@ class ForensicExtractorEngine:
                     file_pts = parse_coreroutine_db(full_p, rel_p)
                 elif "cache_encrypted" in fname or "lockcache" in fname:
                     file_pts = parse_locationd_db(full_p, rel_p)
+                elif "cache.sqlite" in fname or (fname.startswith("cache") and fext in ('.sqlite', '.db')):
+                    file_pts = parse_ios_cache_sqlite(full_p, rel_p)
                 elif "photos.sqlite" in fname:
                     file_pts = parse_photos_db(full_p, rel_p)
                 elif "geohistory" in fname or ("maps" in fname and fext in ('.db', '.sqlite', '.mapsdata')):
