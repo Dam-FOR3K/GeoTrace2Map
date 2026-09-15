@@ -1,14 +1,96 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 GeoTrace2Map (GT2M) - Messaging Apps Geolocation Parser
 Extracts shared & live locations from WhatsApp, Telegram, Signal, Snapchat, and Waze.
 """
 import sqlite3
 import os
+import re
+import urllib.parse
 from typing import List
 from core.models import ForensicLocationPoint
 from core.timestamps import parse_forensic_timestamp
 from core.coordinates import validate_coordinates
+
+COORD_TEXT_PATTERNS = [
+    re.compile(r'https?://(?:maps\.apple\.com|maps\.google\.com|goo\.gl/maps|google\.com/maps|waze\.com)[^\s"\'<>]+', re.IGNORECASE),
+    re.compile(r'geo:([+-]?\d+\.\d{3,}),([+-]?\d+\.\d{3,})', re.IGNORECASE),
+    re.compile(r'[?&](?:latitude|lat)=([+-]?\d+\.\d{3,})[^\s&]*&[^\s&]*(?:longitude|lon|lng)=([+-]?\d+\.\d{3,})', re.IGNORECASE),
+    re.compile(r'[?&](?:q|loc|ll|center|near)=([+-]?\d+\.\d{3,})[,%2C]([+-]?\d+\.\d{3,})', re.IGNORECASE),
+    re.compile(r'/@([+-]?\d+\.\d{3,}),([+-]?\d+\.\d{3,})', re.IGNORECASE),
+]
+
+def _extract_coords_from_message_text(text: str, date_val, source_file: str, source_label: str, os_hint: str) -> List[ForensicLocationPoint]:
+    pts = []
+    if not text or len(text) < 8:
+        return pts
+    decoded = urllib.parse.unquote(text)
+    for pat in COORD_TEXT_PATTERNS:
+        m = pat.search(decoded)
+        if m:
+            groups = m.groups()
+            if len(groups) == 2:
+                try:
+                    lat, lon = float(groups[0]), float(groups[1])
+                    valid, s_lat, s_lon = validate_coordinates(lat, lon)
+                    if valid:
+                        ts_utc, ts_loc, ep = parse_forensic_timestamp(date_val, hint_os=os_hint)
+                        pts.append(ForensicLocationPoint(
+                            latitude=s_lat,
+                            longitude=s_lon,
+                            accuracy=20.0,
+                            timestamp_raw=date_val,
+                            timestamp_utc=ts_utc,
+                            timestamp_local=ts_loc,
+                            epoch_type=ep,
+                            source_file=source_file,
+                            source_type=source_label,
+                            category="messaging",
+                            table_or_field="Message Content (Shared Location)",
+                            device_os=os_hint,
+                            confidence="high",
+                            extra_data={
+                                "Extrait_Message": text[:150],
+                                "Type": "Partage de Position SMS/Chat"
+                            }
+                        ))
+                        break
+                except Exception:
+                    pass
+            elif m.group(0).startswith("http"):
+                # Nested search inside the URL
+                for sub_pat in COORD_TEXT_PATTERNS[2:]:
+                    sub_m = sub_pat.search(decoded)
+                    if sub_m:
+                        try:
+                            lat, lon = float(sub_m.group(1)), float(sub_m.group(2))
+                            valid, s_lat, s_lon = validate_coordinates(lat, lon)
+                            if valid:
+                                ts_utc, ts_loc, ep = parse_forensic_timestamp(date_val, hint_os=os_hint)
+                                pts.append(ForensicLocationPoint(
+                                    latitude=s_lat,
+                                    longitude=s_lon,
+                                    accuracy=20.0,
+                                    timestamp_raw=date_val,
+                                    timestamp_utc=ts_utc,
+                                    timestamp_local=ts_loc,
+                                    epoch_type=ep,
+                                    source_file=source_file,
+                                    source_type=source_label,
+                                    category="messaging",
+                                    table_or_field="Message URL (Shared Location)",
+                                    device_os=os_hint,
+                                    confidence="high",
+                                    extra_data={
+                                        "Lien_Partage": m.group(0)[:150],
+                                        "Type": "Lien Cartographique"
+                                    }
+                                ))
+                                break
+                        except Exception:
+                            pass
+                break
+    return pts
 
 def parse_messaging_db(db_path: str, source_display_path: str) -> List[ForensicLocationPoint]:
     points: List[ForensicLocationPoint] = []
@@ -21,6 +103,11 @@ def parse_messaging_db(db_path: str, source_display_path: str) -> List[ForensicL
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
+        
+        try:
+            cur.execute("PRAGMA wal_checkpoint(PASSIVE)")
+        except Exception:
+            pass
         
         cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
         tables = [r[0] for r in cur.fetchall()]
@@ -162,6 +249,44 @@ def parse_messaging_db(db_path: str, source_display_path: str) -> List[ForensicL
                                 ))
                 except Exception:
                     pass
+
+        # 4. SMS/iMessage iOS (sms.db -> message.text, date)
+        if "message" in tables and "handle" in tables:
+            try:
+                cur.execute("SELECT text, date FROM message WHERE text IS NOT NULL AND length(text) > 8 LIMIT 20000")
+                for row in cur.fetchall():
+                    txt = row["text"]
+                    d_val = row["date"]
+                    pts = _extract_coords_from_message_text(txt, d_val, source_display_path, "SMS / iMessage iOS", "iOS")
+                    if pts:
+                        points.extend(pts)
+            except Exception:
+                pass
+
+        # 5. SMS/MMS Android (mmssms.db -> sms.body, part.text)
+        if "sms" in tables and any(c in tables for c in ("pdu", "threads", "words")):
+            try:
+                cur.execute("SELECT body, date FROM sms WHERE body IS NOT NULL AND length(body) > 8 LIMIT 20000")
+                for row in cur.fetchall():
+                    txt = row["body"]
+                    d_val = row["date"]
+                    pts = _extract_coords_from_message_text(txt, d_val, source_display_path, "SMS Android", "Android")
+                    if pts:
+                        points.extend(pts)
+            except Exception:
+                pass
+
+        if "part" in tables:
+            try:
+                cur.execute("SELECT text, date FROM part WHERE text IS NOT NULL AND length(text) > 8 LIMIT 5000")
+                for row in cur.fetchall():
+                    txt = row["text"]
+                    d_val = row["date"] if "date" in row.keys() else None
+                    pts = _extract_coords_from_message_text(txt, d_val, source_display_path, "MMS Android", "Android")
+                    if pts:
+                        points.extend(pts)
+            except Exception:
+                pass
 
         conn.close()
     except Exception:

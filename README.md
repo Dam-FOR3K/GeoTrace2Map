@@ -13,7 +13,11 @@
 * **Uncompressed Local Directories**: Direct in-place scanning without disk duplication.
 * **Forensic Extraction Reports**: .xlsx and .csv files from Cellebrite Physical Analyzer, UFED Reader, and Oxygen Forensics (with automated header row detection and timezone offsets UTC+X).
 * **Standalone Files**: SQLite databases (.sqlite, .db, .db3, .mapsdata), track logs (.gpx, .kml, .geojson), Google Takeout JSON files, and media with embedded EXIF GPS tags (JPEG, HEIC, PNG, TIFF, WebP).
-* **iOS Cache.sqlite & CFNetwork Harvester**: Deep inspection of application network caches (`Library/Caches/<bundle_id>/Cache.sqlite`), extracting GPS coordinates embedded in API request URLs (`cfurl_cache_response`), slippy map tile URLs (`/z/x/y.png`), cached response JSON blobs (`cfurl_cache_receiver_data`), and legacy `locationd` databases.
+* **iOS Cache.sqlite & CFNetwork Harvester**: Deep inspection of application network caches (`Library/Caches/<bundle_id>/Cache.sqlite`), extracting GPS coordinates embedded in API request URLs (`cfurl_cache_response`), slippy map tile URLs (`/z/x/y.png`), cached response JSON blobs (`cfurl_cache_receiver_data`), and legacy `locationd` databases with Write-Ahead Log (`-wal`) binary carving.
+* **Android MediaStore / MediaProvider (`external.db`)**: Direct extraction from Android MediaProvider databases indexing coordinates of camera photos and downloads, recovering evidence even if original image files have been purged.
+* **Apple Maps GeoBookmarks & Pins (`GeoBookmarks.plist`)**: Automatic extraction of user saved places, Home/Work labels, and dropped pins from binary/XML plists.
+* **Mobile Browser Navigation History**: Parsing Safari (`History.db`) and Google Chrome (`History`) for search URLs containing map destinations, Google/Apple Maps pins, and coordinate links.
+* **SMS & Messaging Location Shares**: Detection of geographic links (`geo:`, Google Maps, Apple Maps, Waze) in iOS `sms.db`, Android `mmssms.db`, and chat applications.
 * **Generic SQLite Scraper**: Heuristic pattern matching on unindexed SQLite databases to extract coordinates, accuracy, altitude, and epoch timestamps automatically.
 
 ### 2. Forensic Traceability & Chain of Custody
@@ -122,10 +126,10 @@ python run.py
 
 | Operating System / Source | Artifact Location & Files | Recovered Forensic Data |
 | :--- | :--- | :--- |
-| **iOS System** | CoreRoutine.sqlite, cache_encryptedA.db, cache_encryptedB.db, lockCache_encryptedA.db, legacy locationd/Cache.sqlite (or consolidated.db) | GPS fixes, Significant visits, frequent locations, paired Bluetooth vehicles, Wi-Fi hotspots, cell towers |
-| **iOS Apps & Media** | Photos.sqlite, GeoHistory.mapsdata, WhatsApp (ChatStorage.sqlite), **App Cache.sqlite** (CFNetwork / NSURLCache in `Library/Caches/<bundle_id>/Cache.sqlite`: Google Maps, Apple Maps, Waze, Uber, Social Media, Browsers) | Geotagged camera rolls, Apple Maps navigation & search history, shared live locations, **embedded GPS coordinates in HTTP/API request URLs (`cfurl_cache_response`), slippy map tile URLs (`/z/x/y.png`), and cached JSON response blobs (`cfurl_cache_receiver_data`)** |
-| **Android System** | gservices.db, location.db, fused_location, telephony.db, geolocation.db | Google Location History cache, Fused Location Provider, base stations (cell towers) |
-| **Android Apps** | Google Maps (da_destination_history), WhatsApp (msgstore.db), Waze | Turn-by-turn navigation history, search destinations, shared WhatsApp coordinates |
+| **iOS System** | CoreRoutine.sqlite, **Local.sqlite** (`com.apple.routined`), cache_encryptedA.db, cache_encryptedB.db, lockCache_encryptedA.db, legacy locationd/Cache.sqlite (or consolidated.db) | GPS fixes, Significant visits, local frequent locations, paired Bluetooth vehicles, Wi-Fi hotspots, cell towers |
+| **iOS Apps & Media** | Photos.sqlite, GeoHistory.mapsdata, **GeoBookmarks.plist**, **Safari (History.db)**, **SMS/iMessage (sms.db)**, WhatsApp (ChatStorage.sqlite), **App Cache.sqlite** (CFNetwork / NSURLCache in `Library/Caches/<bundle_id>/Cache.sqlite`: Google Maps, Apple Maps, Waze, Uber, Social Media, Browsers) | Geotagged camera rolls, Apple Maps search history & saved bookmarks/pins, Safari map searches, shared SMS pin drops, live locations, **embedded GPS coordinates in HTTP/API request URLs (`cfurl_cache_response`), slippy map tile URLs (`/z/x/y.png`), and carved WAL frames (`Cache.sqlite-wal`)** |
+| **Android System** | gservices.db, location.db, fused_location, telephony.db, geolocation.db, **external.db / media.db (MediaStore / MediaProvider)** | Google Location History cache, Fused Location Provider, base stations (cell towers), **indexed image/video GPS coordinates from camera & downloads** |
+| **Android Apps** | **Google Maps (`gmm_storage.db`, `da_destination_history`)**, **Chrome (`History`)**, **SMS/MMS (`mmssms.db`)**, WhatsApp (`msgstore.db`), Waze | Turn-by-turn navigation history, search destinations, web browser map searches, shared SMS/MMS geographic links & coordinates, shared WhatsApp coordinates |
 | **Forensic Reports** | .xlsx / .csv (Cellebrite Physical Analyzer, UFED Reader, Oxygen) | Normalized location tables, carved records, WAL journal recoveries |
 | **Raw Media & Tracks** | JPEG, HEIC, PNG, GPX, KML, Google Takeout JSON | EXIF GPS tags, GPX tracks, KML waypoints, Google Location records |
 | **Generic Scraper** | Any unindexed .sqlite, .db, .db3 file | Heuristic extraction of latitude, longitude, timestamp, accuracy, altitude |

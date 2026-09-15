@@ -132,6 +132,36 @@ def create_synthetic_test_zip(output_zip_path: str):
             wf.write(b"GET https://maps.apple.com/?lat=44.8378&lon=-0.5792&mode=driving HTTP/1.1\r\nHost: maps.apple.com\r\n")
             wf.write(b"\x00" * 512)
 
+        # 8. Create simulated Android MediaProvider external.db
+        media_dir = os.path.join(temp_dir, "data", "data", "com.android.providers.media", "databases")
+        os.makedirs(media_dir, exist_ok=True)
+        ext_db = os.path.join(media_dir, "external.db")
+        conn = sqlite3.connect(ext_db)
+        conn.execute("CREATE TABLE files (latitude REAL, longitude REAL, datetaken INTEGER, _data TEXT, _display_name TEXT, mime_type TEXT)")
+        conn.execute("INSERT INTO files VALUES (43.2965, 5.3698, 1685000000000, '/storage/emulated/0/DCIM/Camera/IMG_2023.jpg', 'IMG_2023.jpg', 'image/jpeg')")
+        conn.commit()
+        conn.close()
+
+        # 9. Create simulated iOS GeoBookmarks.plist
+        maps_dir = os.path.join(temp_dir, "private", "var", "mobile", "Containers", "Data", "Application", "TEST_UUID", "Library", "Maps")
+        os.makedirs(maps_dir, exist_ok=True)
+        plist_path = os.path.join(maps_dir, "GeoBookmarks.plist")
+        import plistlib
+        with open(plist_path, "wb") as pf:
+            plistlib.dump({"title": "Favoris Maison", "latitude": 47.2184, "longitude": -1.5536, "date": 700040000.0}, pf)
+
+        # 10. Create simulated Safari History.db
+        safari_dir = os.path.join(temp_dir, "private", "var", "mobile", "Library", "Safari")
+        os.makedirs(safari_dir, exist_ok=True)
+        hist_db = os.path.join(safari_dir, "History.db")
+        conn = sqlite3.connect(hist_db)
+        conn.execute("CREATE TABLE history_items (id INTEGER PRIMARY KEY, url TEXT, domain_expansion TEXT)")
+        conn.execute("CREATE TABLE history_visits (id INTEGER PRIMARY KEY, history_item INTEGER, visit_time REAL, title TEXT)")
+        conn.execute("INSERT INTO history_items VALUES (1, 'https://maps.google.com/?q=50.6292,3.0573', 'maps.google.com')")
+        conn.execute("INSERT INTO history_visits VALUES (1, 1, 700050000.0, 'Google Maps Lille')")
+        conn.commit()
+        conn.close()
+
         # Pack into ZIP
         with zipfile.ZipFile(output_zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
             for root, _, files in os.walk(temp_dir):

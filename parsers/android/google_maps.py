@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 GeoTrace2Map (GT2M) - Android Google Maps & Navigation Cache Parser
 """
@@ -19,6 +19,11 @@ def parse_android_maps_db(db_path: str, source_display_path: str) -> List[Forens
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
         
+        try:
+            cur.execute("PRAGMA wal_checkpoint(PASSIVE)")
+        except Exception:
+            pass
+        
         cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
         tables = [r[0] for r in cur.fetchall()]
         
@@ -27,10 +32,10 @@ def parse_android_maps_db(db_path: str, source_display_path: str) -> List[Forens
                 cur.execute(f"PRAGMA table_info({tbl})")
                 cols = [c[1].lower() for c in cur.fetchall()]
                 
-                lat_col = next((c for c in cols if c in ("dest_lat", "latitude", "lat", "latitude_e6", "latitude_e7")), None)
-                lon_col = next((c for c in cols if c in ("dest_lng", "dest_lon", "longitude", "lon", "lng", "longitude_e6", "longitude_e7")), None)
+                lat_col = next((c for c in cols if c in ("dest_lat", "latitude", "lat", "latitude_e6", "latitude_e7", "center_lat", "start_lat", "end_lat", "point_lat")), None)
+                lon_col = next((c for c in cols if c in ("dest_lng", "dest_lon", "longitude", "lon", "lng", "longitude_e6", "longitude_e7", "center_lng", "start_lng", "end_lng", "point_lng")), None)
                 time_col = next((c for c in cols if "time" in c or "date" in c or "timestamp" in c), None)
-                title_col = next((c for c in cols if "title" in c or "name" in c or "query" in c or "dest_title" in c), None)
+                title_col = next((c for c in cols if "title" in c or "name" in c or "query" in c or "dest_title" in c or "address" in c), None)
                 
                 if lat_col and lon_col:
                     cur.execute(f"SELECT * FROM {tbl}")

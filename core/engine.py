@@ -25,6 +25,9 @@ from parsers.media.exif_parser import parse_media_exif
 from parsers.apps.messaging_parser import parse_messaging_db
 from parsers.generic.sqlite_scraper import scrape_generic_sqlite
 from parsers.generic.geo_files import parse_geo_file
+from parsers.android.media_provider import parse_media_provider_db
+from parsers.ios.geobookmarks import parse_geobookmarks_plist
+from parsers.apps.browser_history import parse_browser_history_db
 
 class ForensicExtractorEngine:
     def __init__(self, mls_db_path: str = "MLS.db"):
@@ -107,7 +110,7 @@ class ForensicExtractorEngine:
                 file_pts = []
                 
                 # Check for specialized parsers
-                if "coreroutine" in fname and fext in ('.sqlite', '.db', ''):
+                if ("coreroutine" in fname or fname == "local.sqlite" or ("routined" in rel_p.lower() and fext in ('.sqlite', '.db'))) and fext in ('.sqlite', '.db', ''):
                     file_pts = parse_coreroutine_db(full_p, rel_p)
                 elif "cache_encrypted" in fname or "lockcache" in fname:
                     file_pts = parse_locationd_db(full_p, rel_p)
@@ -115,14 +118,20 @@ class ForensicExtractorEngine:
                     file_pts = parse_ios_cache_sqlite(full_p, rel_p)
                 elif "photos.sqlite" in fname:
                     file_pts = parse_photos_db(full_p, rel_p)
-                elif "geohistory" in fname or ("maps" in fname and fext in ('.db', '.sqlite', '.mapsdata')):
+                elif "geobookmarks" in fname and fext in ('.plist', ''):
+                    file_pts = parse_geobookmarks_plist(full_p, rel_p)
+                elif fname in ("external.db", "media.db", "external-primary.db") or ("providers.media" in rel_p.lower() and fext in ('.db', '.sqlite')):
+                    file_pts = parse_media_provider_db(full_p, rel_p)
+                elif "geohistory" in fname or "gmm_storage" in fname or ("maps" in fname and fext in ('.db', '.sqlite', '.mapsdata')):
                     file_pts = parse_apple_maps_db(full_p, rel_p) or parse_android_maps_db(full_p, rel_p)
                 elif fname in ("location.db", "gservices.db", "geolocation.db") or "fused" in fname:
                     file_pts = parse_android_location_db(full_p, rel_p)
                 elif "telephony.db" in fname:
                     file_pts = parse_android_telephony_db(full_p, rel_p, self.mls_db_path)
-                elif "chatstorage" in fname or "msgstore" in fname or "waze" in fname:
+                elif "chatstorage" in fname or "msgstore" in fname or "waze" in fname or fname in ("sms.db", "mmssms.db"):
                     file_pts = parse_messaging_db(full_p, rel_p)
+                elif fname in ("history.db", "history") and ("safari" in rel_p.lower() or "chrome" in rel_p.lower() or "browser" in rel_p.lower()):
+                    file_pts = parse_browser_history_db(full_p, rel_p)
                 elif fext in ('.xlsx', '.xls'):
                     file_pts = parse_ufed_file(full_p, rel_p)
                 elif fext in ('.jpg', '.jpeg', '.heic', '.heif', '.png', '.tiff', '.webp'):
@@ -219,12 +228,13 @@ class ForensicExtractorEngine:
             with zipfile.ZipFile(archive_path, 'r') as zf:
                 # Filter useful extensions to save time and disk
                 valid_exts = ('.sqlite', '.db', '.sqlite3', '.db3', '.mapsdata', '.xlsx', '.xls', '.csv', 
-                              '.jpg', '.jpeg', '.heic', '.png', '.gpx', '.kml', '.geojson', '.json', '.xml')
+                              '.jpg', '.jpeg', '.heic', '.png', '.gpx', '.kml', '.geojson', '.json', '.xml',
+                              '.plist', '-wal', '-shm')
                 for member in zf.infolist():
                     if member.is_dir():
                         continue
                     m_lower = member.filename.lower()
-                    if any(m_lower.endswith(ext) for ext in valid_exts) or "cache" in m_lower or "location" in m_lower:
+                    if any(m_lower.endswith(ext) for ext in valid_exts) or "cache" in m_lower or "location" in m_lower or "history" in m_lower or "geobookmarks" in m_lower:
                         try:
                             zf.extract(member, extract_dir)
                         except Exception:
